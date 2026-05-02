@@ -2,8 +2,6 @@ import { useEffect, useMemo, useRef } from "react";
 import { getVsCodeApi } from "../vscode-api";
 import type {
   EditedSection,
-  GemmaFlags,
-  GemmaUnavailable,
   InboundMessage,
   Mode,
   NewRequest,
@@ -13,8 +11,6 @@ import type {
 
 interface Handlers {
   onNewRequest: (msg: NewRequest) => void;
-  onGemmaFlags: (msg: GemmaFlags) => void;
-  onGemmaUnavailable?: (msg: GemmaUnavailable) => void;
   onSnapshot?: (msg: Snapshot) => void;
   onTimeoutWarning?: (msg: TimeoutWarning) => void;
 }
@@ -32,12 +28,6 @@ export function useWebSocket(handlers: Handlers) {
       switch (data.type) {
         case "new_request":
           handlersRef.current.onNewRequest(data);
-          break;
-        case "gemma_flags":
-          handlersRef.current.onGemmaFlags(data);
-          break;
-        case "gemma_unavailable":
-          handlersRef.current.onGemmaUnavailable?.(data);
           break;
         case "snapshot":
           handlersRef.current.onSnapshot?.(data);
@@ -74,9 +64,6 @@ export function useWebSocket(handlers: Handlers) {
       },
       sendPauseToggle(paused: boolean) {
         api.postMessage({ type: "pause_toggle", paused });
-      },
-      sendRequestFlagging(requestId: string, sectionIndex: number) {
-        api.postMessage({ type: "request_flagging", requestId, sectionIndex });
       },
       sendCommitEditsNow(
         requestId: string,

@@ -155,6 +155,9 @@ async def forward_messages(body: dict[str, Any], headers: dict[str, str]) -> Res
         except (httpx.ReadError, httpx.RemoteProtocolError) as exc:
             logger.warning("forwarder: upstream stream broke: %s", exc)
         finally:
+            # Decrement first — if aclose() blocks or raises, we still don't
+            # want stream_in_flight to leak, otherwise Gemma's _wait_for_idle
+            # spins forever.
             _release()
             try:
                 await upstream.aclose()

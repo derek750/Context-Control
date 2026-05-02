@@ -15,7 +15,6 @@ import conversation_state
 import forwarder
 import gating
 import ws_manager
-from backboard import ingest as bb_ingest
 from models import NewRequest, Section
 
 logger = logging.getLogger(__name__)
@@ -149,7 +148,6 @@ async def handle(request: Request) -> Response:
 
     raw = await request.body()
     headers = dict(request.headers)
-    bb_ingest.set_user_key(headers.get("x-autonomy-user", "local"))
 
     try:
         body: dict[str, Any] = json.loads(raw)
@@ -182,7 +180,6 @@ async def handle(request: Request) -> Response:
         return await forwarder.forward_messages(body, headers)
 
     request_id = uuid.uuid4().hex
-    pre_sync = copy.deepcopy(body)
 
     # Merge into canonical BEFORE classifying. The bar chart, the held copy,
     # the snapshot replay, and the upstream forward all see the same canonical.
@@ -191,8 +188,6 @@ async def handle(request: Request) -> Response:
     # request was stripped separately — re-apply the cap to the merged body.
     body = _enforce_cache_cap(body, "post-sync canonical")
 
-    bb_ingest.schedule_raw_incoming(pre_sync, request_id)
-    bb_ingest.schedule_canonical_synced(copy.deepcopy(body), request_id)
     sections, total_tokens, total_cost, model = classifier.classify(body)
     _remember(request_id, sections)
 
@@ -236,8 +231,6 @@ async def handle(request: Request) -> Response:
         _held_requests.append(new_request)
 
     await ws_manager.send(new_request)
-    # Gemma flagging runs on demand when requested by the UI (see
-    # RequestFlagging → analyzer.flag in main.py), not for every request.
 
     if must_hold:
         held = gating.register(request_id)

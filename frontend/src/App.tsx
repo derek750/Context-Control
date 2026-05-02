@@ -8,16 +8,7 @@ import { useSelection } from "./hooks/useSelection";
 import { useUndo, type UndoSnapshot } from "./hooks/useUndo";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { installMockHarness, isMockMode } from "./mock/harness";
-import type {
-  EditedSection,
-  GemmaFlag,
-  GemmaFlags,
-  Mode,
-  NewRequest,
-  Section,
-  Snapshot,
-} from "./types";
-import { getVsCodeApi } from "./vscode-api";
+import type { EditedSection, Mode, NewRequest, Section, Snapshot } from "./types";
 
 interface CurrentRequest {
   requestId: string;
@@ -36,21 +27,14 @@ interface AppState {
   // only ever holds one at a time in normal use, but this guards against
   // back-to-back rapid prompts silently displacing one another.
   pendingQueue: NewRequest[];
-  gemmaFlagsByIndex: Record<number, GemmaFlag>;
-  isFlaggingPending: boolean;
   removedIndices: Set<number>;
   editedSections: Map<number, string>;
   editorOpenForIndex: number | null;
-  gemmaAvailable: boolean;
-  gemmaUnavailableNoticeShown: boolean;
 }
 
 type Action =
   | { type: "new_request"; msg: NewRequest }
   | { type: "snapshot"; msg: Snapshot }
-  | { type: "gemma_flags"; msg: GemmaFlags }
-  | { type: "request_flagging_pending" }
-  | { type: "gemma_unavailable" }
   | { type: "mode_change"; mode: Mode }
   | { type: "pause_toggle"; paused: boolean }
   | { type: "confirm_removed"; indices: number[] }
@@ -58,8 +42,7 @@ type Action =
   | { type: "edit_section"; index: number; content: string }
   | { type: "open_editor"; index: number }
   | { type: "close_editor" }
-  | { type: "after_send" }
-  | { type: "mark_gemma_notice_seen" };
+  | { type: "after_send" };
 
 function buildCurrentRequest(msg: NewRequest, fallbackHeld: boolean): CurrentRequest {
   return {
@@ -91,35 +74,21 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         mode: msg.mode,
         paused: msg.paused,
-        gemmaAvailable: msg.gemmaAvailable,
       };
-      // Reconcile multi-hold queue: server is source of truth. Filter to
-      // main-conversation, drop the head (which becomes currentRequest),
-      // and replace local pendingQueue. Without this, reconnecting after
-      // multiple holds piled up shows only one — the rest stay invisible.
       const pendingFromSnapshot = (msg.pendingRequests ?? []).filter(
         isMainConversationRequest,
       );
       if (pendingFromSnapshot.length > 1) {
         next.pendingQueue = pendingFromSnapshot.slice(1);
       } else if (state.pendingQueue.length > 0 && pendingFromSnapshot.length <= 1) {
-        // Server has cleared queue (e.g. all queued requests were resolved
-        // while the panel was disconnected). Sync down.
         next.pendingQueue = [];
       }
       if (incoming && isMainConversationRequest(incoming)) {
         const sameId = state.currentRequest?.requestId === incoming.requestId;
         if (!sameId) {
-          // tool_chain steps within a top-level turn must preserve the
-          // user's in-flight edits — backend canonical already reflects
-          // committed deletes, but a section the user *was* editing in
-          // Monaco should keep its uncommitted text. Only top_level boundaries
-          // signal "new turn, start clean."
           const isTopLevel = (incoming.kind ?? "top_level") === "top_level";
           next.currentRequest = buildCurrentRequest(incoming, isHeld);
           if (isTopLevel) {
-            next.gemmaFlagsByIndex = {};
-            next.isFlaggingPending = false;
             next.removedIndices = new Set();
             next.editedSections = new Map();
             next.editorOpenForIndex = null;
@@ -132,16 +101,9 @@ function reducer(state: AppState, action: Action): AppState {
     }
     case "new_request": {
       const { msg } = action;
-      // Skip auxiliary Claude Code calls (title gen, topic detection,
-      // summarization). They have no tools and tiny system prompts; if we
-      // let them through they overwrite the main chart with 2-3 bars of
-      // noise. The main conversation chart stays put across them.
       if (!isMainConversationRequest(msg)) {
         return state;
       }
-      // If a different request is currently held, queue the new arrival
-      // instead of silently displacing it (which would leave the proxy
-      // waiting on an event nobody can fire).
       if (
         state.currentRequest &&
         state.currentRequest.held &&
@@ -151,9 +113,9 @@ function reducer(state: AppState, action: Action): AppState {
       }
       const isHeld = msg.held ?? state.mode === "ask_permission";
       const isTopLevel = (msg.kind ?? "top_level") === "top_level";
-      // tool_chain continuations preserve in-flight edits / Gemma flags so a
-      // section the user was mid-editing in Monaco doesn't lose its text the
-      // moment the next step arrives. top_level prompts always start clean.
+      // tool_chain continuations preserve in-flight edits so a section the user
+      // was mid-editing in Monaco doesn't lose its text the moment the next
+      // step arrives. top_level prompts always start clean.
       if (!isTopLevel) {
         return {
           ...state,
@@ -163,30 +125,11 @@ function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         currentRequest: buildCurrentRequest(msg, isHeld),
-        gemmaFlagsByIndex: {},
-        isFlaggingPending: false,
         removedIndices: new Set(),
         editedSections: new Map(),
         editorOpenForIndex: null,
       };
     }
-    case "gemma_flags": {
-      if (
-        !state.currentRequest ||
-        state.currentRequest.requestId !== action.msg.requestId
-      ) {
-        return state;
-      }
-      const next = { ...state.gemmaFlagsByIndex };
-      for (const flag of action.msg.flags) next[flag.sectionIndex] = flag;
-      return { ...state, gemmaFlagsByIndex: next, isFlaggingPending: false };
-    }
-    case "request_flagging_pending": {
-      if (state.isFlaggingPending) return state;
-      return { ...state, isFlaggingPending: true };
-    }
-    case "gemma_unavailable":
-      return { ...state, gemmaUnavailableNoticeShown: true };
     case "mode_change":
       return { ...state, mode: action.mode };
     case "pause_toggle":
@@ -205,12 +148,7 @@ function reducer(state: AppState, action: Action): AppState {
     case "edit_section": {
       const next = new Map(state.editedSections);
       next.set(action.index, action.content);
-      // Drop the stale Gemma flag for this section — its highlights point
-      // at character offsets in the old `rawContent` and would visually
-      // misalign on the edited text.
-      const nextFlags = { ...state.gemmaFlagsByIndex };
-      delete nextFlags[action.index];
-      return { ...state, editedSections: next, gemmaFlagsByIndex: nextFlags };
+      return { ...state, editedSections: next };
     }
     case "open_editor":
       return { ...state, editorOpenForIndex: action.index };
@@ -218,7 +156,6 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, editorOpenForIndex: null };
     case "after_send": {
       const cr = state.currentRequest;
-      // Promote next queued held request (if any) so the user can keep going.
       if (state.pendingQueue.length > 0) {
         const [next, ...rest] = state.pendingQueue;
         const isHeld = next.held ?? state.mode === "ask_permission";
@@ -226,8 +163,6 @@ function reducer(state: AppState, action: Action): AppState {
           ...state,
           currentRequest: buildCurrentRequest(next, isHeld),
           pendingQueue: rest,
-          gemmaFlagsByIndex: {},
-          isFlaggingPending: false,
           removedIndices: new Set(),
           editedSections: new Map(),
           editorOpenForIndex: null,
@@ -241,27 +176,18 @@ function reducer(state: AppState, action: Action): AppState {
         editorOpenForIndex: null,
       };
     }
-    case "mark_gemma_notice_seen":
-      return { ...state, gemmaUnavailableNoticeShown: true };
   }
 }
 
 function loadInitialState(): AppState {
-  const persisted = getVsCodeApi().getState();
   return {
     mode: "auto_send",
     paused: false,
     currentRequest: null,
     pendingQueue: [],
-    gemmaFlagsByIndex: {},
-    isFlaggingPending: false,
     removedIndices: new Set(),
     editedSections: new Map(),
     editorOpenForIndex: null,
-    // Optimistic until the proxy snapshot tells us otherwise — the snapshot
-    // arrives within a tick of WS connect.
-    gemmaAvailable: true,
-    gemmaUnavailableNoticeShown: persisted?.gemmaUnavailableNoticeShown ?? false,
   };
 }
 
@@ -282,15 +208,6 @@ export default function App() {
     return () => clearTimeout(t);
   }, [undoToast?.id]);
 
-  // Persist the one-time Gemma-unavailable notice flag so reload doesn't
-  // re-show it (instructions §7.7 / FR-8.8).
-  useEffect(() => {
-    getVsCodeApi().setState({
-      gemmaUnavailableNoticeShown: state.gemmaUnavailableNoticeShown,
-    });
-  }, [state.gemmaUnavailableNoticeShown]);
-
-  // Latest-state mirror so the 30s Gemma timeout can re-check at fire time.
   const stateRef = useRef(state);
   useEffect(() => {
     stateRef.current = state;
@@ -298,11 +215,6 @@ export default function App() {
 
   const senders = useWebSocket({
     onNewRequest: (msg: NewRequest) => {
-      // Auxiliary calls (no tools) get filtered inside the reducer; only
-      // clear marks/undo when the chart is actually about to change AND
-      // we're crossing a top_level boundary. Within a top_level turn,
-      // tool_chain steps keep the undo stack so Cmd+Z still reverts edits
-      // made earlier in the turn.
       const cur = stateRef.current;
       const isMain = msg.sections.some((s) => s.sectionType === "tool_def");
       const isTopLevel = (msg.kind ?? "top_level") === "top_level";
@@ -320,8 +232,6 @@ export default function App() {
         undo.clear();
       }
     },
-    onGemmaFlags: (msg: GemmaFlags) => dispatch({ type: "gemma_flags", msg }),
-    onGemmaUnavailable: () => dispatch({ type: "gemma_unavailable" }),
     onSnapshot: (msg: Snapshot) => {
       const cur = stateRef.current;
       const incoming = msg.pendingRequest ?? msg.latestRequest ?? null;
@@ -339,14 +249,11 @@ export default function App() {
     },
   });
 
-  // Mock harness — only active when ?mock=1 is in the URL.
   useEffect(() => {
     if (!isMockMode()) return;
     return installMockHarness();
   }, []);
 
-  // Visible-section computation: source list minus removed indices, with edits
-  // overlaid for live token estimation.
   const visibleSections = useMemo<Section[]>(() => {
     const cr = state.currentRequest;
     if (!cr) return [];
@@ -360,13 +267,6 @@ export default function App() {
       });
   }, [state.currentRequest, state.removedIndices, state.editedSections]);
 
-  // Empty-conversation guard (§7.3): block deletion that would empty the
-  // request or leave only the lone original user message. Also block
-  // deletes that would leave a `tool_result` user message (sectionType
-  // "tool_output") with no preceding `tool_use` assistant message — that's
-  // a 400 from Anthropic ("orphan tool_result"), so we must catch it
-  // *before* the user commits the delete to canonical, where it would
-  // poison every future request.
   const canDelete = useCallback(
     (toDelete: Iterable<number>) => {
       const cr = state.currentRequest;
@@ -375,10 +275,6 @@ export default function App() {
       for (const i of toDelete) removed.add(i);
       const remaining = cr.sections.filter((s) => !removed.has(s.index));
       if (remaining.length === 0) return false;
-      // Orphan check: walk remaining in order, ensure cumulative tool_call
-      // count never falls below cumulative tool_output count. (Approximate —
-      // we can't match by tool_use_id since rawContent doesn't carry it
-      // structured — but conservatively correct.)
       let calls = 0;
       let outputs = 0;
       for (const s of remaining) {
@@ -393,7 +289,6 @@ export default function App() {
     [state.currentRequest, state.removedIndices],
   );
 
-  // Intercept marking + confirming so the empty-conversation guard runs there.
   const confirmDeletion = useCallback(() => {
     const cr = state.currentRequest;
     if (!cr) return;
@@ -409,11 +304,6 @@ export default function App() {
     });
     dispatch({ type: "confirm_removed", indices });
     selection.clearAll();
-    // Auto-commit edits to the proxy's canonical when this request isn't
-    // gated by a Send button. In held mode the user's pending edits ride
-    // along with `approve_modified` on Send; in auto-send (or after Send)
-    // there's no later commit point, so without this the deletion would
-    // disappear the moment Claude Code sends its next prompt.
     if (!cr.held) {
       const merged = new Set(state.removedIndices);
       for (const i of indices) merged.add(i);
@@ -436,7 +326,6 @@ export default function App() {
     const cr = state.currentRequest;
     if (!cr) return;
     if (selection.selectedIndices.size === 0) return;
-    // Don't allow marking if confirming the result would empty things.
     const wouldDelete = new Set([
       ...state.removedIndices,
       ...selection.selectedIndices,
@@ -484,8 +373,6 @@ export default function App() {
     }
   }, [undo, selection, state.removedIndices, state.editedSections, state.currentRequest]);
 
-  // App-level keybindings — only when the editor panel is closed so Monaco
-  // owns its keys (instructions §10).
   useEffect(() => {
     if (state.editorOpenForIndex !== null) return;
     function onKeyDown(e: KeyboardEvent) {
@@ -540,10 +427,6 @@ export default function App() {
     [],
   );
 
-  // Commit accumulated edits when the user dismisses the editor in auto-mode.
-  // Per-keystroke commits would round-trip through the backend as a fresh
-  // top_level snapshot rebroadcast, which the reducer treats as a new turn
-  // and closes the editor mid-type. Deferring to close keeps typing local.
   const handleCloseEditor = useCallback(() => {
     const cr = state.currentRequest;
     const idx = state.editorOpenForIndex;
@@ -608,21 +491,6 @@ export default function App() {
     return state.editedSections.get(editorSection.index) ?? editorSection.rawContent;
   }, [editorSection, state.editedSections]);
 
-  const requestFlagging = useCallback(() => {
-    const cr = state.currentRequest;
-    if (!cr || !editorSection) return;
-    if (!state.gemmaAvailable) return;
-    if (state.isFlaggingPending) return;
-    dispatch({ type: "request_flagging_pending" });
-    senders.sendRequestFlagging(cr.requestId, editorSection.index);
-  }, [
-    state.currentRequest,
-    editorSection,
-    state.gemmaAvailable,
-    state.isFlaggingPending,
-    senders,
-  ]);
-
   const totalTokens = useMemo(() => {
     const cr = state.currentRequest;
     if (!cr) return 0;
@@ -666,17 +534,12 @@ export default function App() {
   return (
     <div className={`app ${state.editorOpenForIndex !== null ? "with-editor" : ""}`}>
       <main className="app-main">
-        {/* Don't key on requestId — Claude Code emits a fresh requestId per
-            tool-chain step, so keying here used to cross-fade the entire
-            chart 5–10× per turn, making bars look like they were "missing"
-            or flashing. The chart now updates in place. */}
         <div style={{ position: "absolute", inset: 0, display: "flex" }}>
           <BarChart
             sections={visibleSections}
             allSections={cr.sections}
             selectedIndices={selection.selectedIndices}
             markedForDelete={selection.markedForDelete}
-            gemmaFlagsByIndex={state.gemmaFlagsByIndex}
             onSelect={(index, shift) => {
               if (shift) {
                 selection.rangeSelect(
@@ -697,10 +560,6 @@ export default function App() {
               key={editorSection.index}
               section={editorSection}
               content={editorContent}
-              gemmaFlag={state.gemmaFlagsByIndex[editorSection.index]}
-              flaggingPending={state.isFlaggingPending}
-              gemmaAvailable={state.gemmaAvailable}
-              onRequestFlagging={requestFlagging}
               onSave={(text) => onEditSection(editorSection.index, text)}
               onDelete={() => onDeleteFromEditor(editorSection.index)}
               onClose={handleCloseEditor}
@@ -735,7 +594,6 @@ export default function App() {
         totalCost={totalCost}
         hasEdits={hasEstimate}
         canUndo={undo.size() > 0}
-        gemmaUnavailable={!state.gemmaAvailable}
         onModeChange={(mode) => {
           dispatch({ type: "mode_change", mode });
           senders.sendModeChange(mode);

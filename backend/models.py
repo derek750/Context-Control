@@ -4,7 +4,6 @@ from typing import Annotated, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
-
 SectionType = Literal[
     "system",
     "tool_def",
@@ -16,7 +15,6 @@ SectionType = Literal[
     "thinking",
     "unknown",
 ]
-Severity = Literal["high", "medium", "low"]
 Mode = Literal["auto_send", "ask_permission"]
 RequestKind = Literal["top_level", "tool_chain"]
 
@@ -53,31 +51,9 @@ class NewRequest(BaseModel):
     createdAt: float = 0.0
 
 
-class Highlight(BaseModel):
-    start: int
-    end: int
-
-
-class GemmaFlag(BaseModel):
-    sectionIndex: int
-    severity: Severity
-    reason: str
-    highlights: list[Highlight] = Field(default_factory=list)
-
-
-class GemmaFlags(BaseModel):
-    type: Literal["gemma_flags"] = "gemma_flags"
-    requestId: str
-    flags: list[GemmaFlag]
-
-
 class TimeoutWarning(BaseModel):
     type: Literal["timeout_warning"] = "timeout_warning"
     requestId: str
-
-
-class GemmaUnavailable(BaseModel):
-    type: Literal["gemma_unavailable"] = "gemma_unavailable"
 
 
 class Snapshot(BaseModel):
@@ -91,7 +67,6 @@ class Snapshot(BaseModel):
     type: Literal["snapshot"] = "snapshot"
     mode: Mode
     paused: bool
-    gemmaAvailable: bool
     pendingRequest: Optional[NewRequest] = None
     latestRequest: Optional[NewRequest] = None
     # All requests currently held for approval, oldest first. `pendingRequest`
@@ -135,12 +110,6 @@ class PauseToggle(BaseModel):
     paused: bool
 
 
-class RequestFlagging(BaseModel):
-    type: Literal["request_flagging"]
-    requestId: str
-    sectionIndex: int
-
-
 class ResetCanonical(BaseModel):
     type: Literal["reset_canonical"]
 
@@ -167,7 +136,6 @@ InboundMessage = Annotated[
         Cancel,
         ModeChange,
         PauseToggle,
-        RequestFlagging,
         ResetCanonical,
         CommitEditsNow,
     ],

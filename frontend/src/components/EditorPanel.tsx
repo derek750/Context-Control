@@ -1,128 +1,16 @@
 import Editor, { type Monaco, type OnMount } from "@monaco-editor/react";
 import type * as monacoNs from "monaco-editor";
 import { motion } from "motion/react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import type { GemmaFlag, Section } from "../types";
+import { useCallback, useMemo, useRef } from "react";
+import type { Section } from "../types";
 import "./EditorPanel.css";
 
 interface Props {
   section: Section;
   content: string;
-  gemmaFlag: GemmaFlag | undefined;
-  flaggingPending: boolean;
-  gemmaAvailable: boolean;
-  onRequestFlagging: () => void;
   onSave: (text: string) => void;
   onDelete: () => void;
   onClose: () => void;
-}
-
-interface DecoratedHighlight {
-  start: number;
-  end: number;
-  reason: string;
-}
-
-const isWs = (ch: string) => /\s/u.test(ch);
-
-/**
- * Expands a half-open [start, end) span to whitespace delimiters. Mid-word
- * ranges grow to the full word. Whitespace-only ranges grow to a contiguous
- * space run (no adjacent words are absorbed).
- */
-function expandHighlightToWhitespaceBoundaries(
-  content: string,
-  start: number,
-  end: number,
-): { start: number; end: number } {
-  const n = content.length;
-  if (n === 0) {
-    return { start: 0, end: 0 };
-  }
-  let s = Math.max(0, Math.min(start, n));
-  let e = Math.max(0, Math.min(end, n));
-  if (e < s) {
-    const t = s;
-    s = e;
-    e = t;
-  }
-
-  if (e > s) {
-    let sMin = s;
-    while (sMin < e && sMin < n && isWs(content[sMin]!)) sMin++;
-    if (sMin >= e) {
-      let a = s;
-      while (a > 0 && isWs(content[a - 1]!)) a--;
-      let b = e;
-      while (b < n && isWs(content[b]!)) b++;
-      return { start: a, end: b };
-    }
-    let sMax = e - 1;
-    while (sMax >= s && sMax >= 0 && isWs(content[sMax]!)) sMax--;
-    s = sMin;
-    while (s > 0 && !isWs(content[s - 1]!)) s--;
-    e = sMax + 1;
-    while (e < n && !isWs(content[e]!)) e++;
-    return { start: s, end: e };
-  }
-
-  if (s >= n) {
-    return { start: n, end: n };
-  }
-  if (isWs(content[s]!)) {
-    let a = s;
-    while (a > 0 && isWs(content[a - 1]!)) a--;
-    let b = s;
-    while (b < n && isWs(content[b]!)) b++;
-    return { start: a, end: b };
-  }
-  let left = s;
-  while (left > 0 && !isWs(content[left - 1]!)) left--;
-  let right = s;
-  while (right < n && !isWs(content[right]!)) right++;
-  return { start: left, end: right };
-}
-
-function isWhitespaceOnlyGap(content: string, gapStart: number, gapEnd: number): boolean {
-  const n = content.length;
-  for (let i = Math.max(0, gapStart); i < Math.min(gapEnd, n); i++) {
-    if (!isWs(content[i]!)) return false;
-  }
-  return true;
-}
-
-/**
- * Merges overlapping/touching ranges, and ranges separated only by whitespace
- * (e.g. [0,44) and [45,103) where index 44 is a space) so the gap is not
- * unstyled between consecutive Gemma word spans.
- */
-function mergeDecoratedHighlights(
-  content: string,
-  items: readonly DecoratedHighlight[],
-): DecoratedHighlight[] {
-  if (items.length === 0) return [];
-  const sorted = [...items].sort((a, b) => a.start - b.start || a.end - b.end);
-  const out: DecoratedHighlight[] = [];
-  let cur: DecoratedHighlight = { ...sorted[0]! };
-  for (let i = 1; i < sorted.length; i++) {
-    const h = sorted[i]!;
-    const gapStart = cur.end;
-    const gapEnd = h.start;
-    const shouldMerge =
-      h.start <= cur.end || isWhitespaceOnlyGap(content, gapStart, gapEnd);
-    if (shouldMerge) {
-      cur = {
-        start: cur.start,
-        end: Math.max(cur.end, h.end),
-        reason: cur.reason || h.reason,
-      };
-    } else {
-      out.push(cur);
-      cur = { ...h };
-    }
-  }
-  out.push(cur);
-  return out;
 }
 
 const TYPE_LABEL: Record<string, string> = {
@@ -140,13 +28,10 @@ const TYPE_LABEL: Record<string, string> = {
 // Section types whose Monaco view is structural (Anthropic schema-bound),
 // not free-form text. Edits to these don't round-trip back into the upstream
 // body — see backend gating._apply_block_edit. The user can still delete
-// the section to skip it. Without this, a user editing the rendered text of
-// e.g. a tool_use block would silently see their changes dropped.
+// the section to skip it.
 const STRUCTURED_TYPES = new Set(["tool_def", "tool_call", "image", "thinking"]);
 
 function languageFor(section: Section): string {
-  // Tool calls are structured JSON. Tool outputs can be logs, source code, or
-  // plain text, so avoid Monaco's JSON diagnostics unless the content is JSON.
   if (section.sectionType === "tool_call") {
     return "json";
   }
@@ -270,17 +155,11 @@ function defineTheme(monaco: Monaco) {
 export function EditorPanel({
   section,
   content,
-  gemmaFlag,
-  flaggingPending,
-  gemmaAvailable,
-  onRequestFlagging,
   onSave,
   onDelete,
   onClose,
 }: Props) {
   const editorRef = useRef<monacoNs.editor.IStandaloneCodeEditor | null>(null);
-  const monacoRef = useRef<Monaco | null>(null);
-  const decorationsRef = useRef<string[]>([]);
 
   const language = useMemo(() => languageFor(section), [section]);
   const tokenEstimate = useMemo(
@@ -288,109 +167,12 @@ export function EditorPanel({
     [content],
   );
 
-  const handleMount: OnMount = useCallback(
-    (editor, monaco) => {
-      editorRef.current = editor;
-      monacoRef.current = monaco;
-      defineTheme(monaco);
-      monaco.editor.setTheme("autonomy");
-      // Double-click-to-accept on a Gemma decoration: detect a click inside any
-      // decoration range and splice that range out.
-      editor.onMouseDown((e) => {
-        const clickCount =
-          // Monaco forwards browser click count as `detail` (sometimes nested).
-          (e.event as unknown as { detail?: number; browserEvent?: { detail?: number } })
-            .detail ?? (e.event as unknown as { browserEvent?: { detail?: number } }).browserEvent?.detail;
-        if (clickCount !== 2) return;
-        const target = e.target;
-        const pos = target.position;
-        if (!pos) return;
-        const model = editor.getModel();
-        if (!model) return;
-        const decos = model.getAllDecorations();
-        for (const d of decos) {
-          if (d.options.className !== "gemma-highlight") continue;
-          if (!d.range.containsPosition(pos)) continue;
-          editor.executeEdits("gemma-accept", [
-            {
-              range: d.range,
-              text: "",
-              forceMoveMarkers: true,
-            },
-          ]);
-          return;
-        }
-      });
-    },
-    [],
-  );
+  const handleMount: OnMount = useCallback((editor, monaco) => {
+    editorRef.current = editor;
+    defineTheme(monaco);
+    monaco.editor.setTheme("autonomy");
+  }, []);
 
-  const resolvedHighlights = useMemo<DecoratedHighlight[]>(() => {
-    if (gemmaFlag && gemmaFlag.highlights.length > 0) {
-      return gemmaFlag.highlights.map((h) => ({
-        start: h.start,
-        end: h.end,
-        reason: gemmaFlag.reason,
-      }));
-    }
-    return [];
-  }, [gemmaFlag]);
-
-  const expandedHighlights = useMemo(() => {
-    if (resolvedHighlights.length === 0) return [];
-    const expanded = resolvedHighlights.map((h) => {
-      const { start, end } = expandHighlightToWhitespaceBoundaries(
-        content,
-        h.start,
-        h.end,
-      );
-      return { ...h, start, end };
-    }).filter((h) => h.start < h.end);
-    return mergeDecoratedHighlights(content, expanded);
-  }, [resolvedHighlights, content]);
-
-  useEffect(() => {
-    const editor = editorRef.current;
-    const monaco = monacoRef.current;
-    if (!editor || !monaco) return;
-    const model = editor.getModel();
-    if (!model || expandedHighlights.length === 0) {
-      decorationsRef.current = editor.deltaDecorations(decorationsRef.current, []);
-      return;
-    }
-    const newDecorations: monacoNs.editor.IModelDeltaDecoration[] = expandedHighlights.map((h) => {
-      const start = Math.max(0, Math.min(h.start, content.length));
-      const end = Math.max(start, Math.min(h.end, content.length));
-      const startPos = model.getPositionAt(start);
-      const endPos = model.getPositionAt(end);
-      return {
-        range: new monaco.Range(
-          startPos.lineNumber,
-          startPos.column,
-          endPos.lineNumber,
-          endPos.column,
-        ),
-        options: {
-          className: "gemma-highlight",
-          inlineClassName: "gemma-highlight-inline",
-          hoverMessage: { value: h.reason },
-          stickiness:
-            monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-        },
-      };
-    });
-    decorationsRef.current = editor.deltaDecorations(
-      decorationsRef.current,
-      newDecorations,
-    );
-  }, [resolvedHighlights, content]);
-
-  // Live-edit: every Monaco change (typing, paste, click-to-accept Gemma
-  // highlight via executeEdits) commits straight to parent state. Previously
-  // we kept a local `draftContent` and only committed on Save click — closing
-  // the panel, switching sections, or clicking Send silently dropped edits,
-  // which violated the product's "what's in the editor is what gets sent"
-  // promise.
   const onEditorChange = useCallback(
     (value: string | undefined) => {
       onSave(value ?? "");
@@ -426,29 +208,6 @@ export function EditorPanel({
               structured · delete to skip
             </span>
           )}
-          <button
-            className="btn"
-            type="button"
-            onClick={onRequestFlagging}
-            disabled={
-              !gemmaAvailable ||
-              flaggingPending ||
-              ((gemmaFlag?.highlights?.length ?? 0) > 0)
-            }
-            title={
-              !gemmaAvailable
-                ? "Gemma offline"
-                : gemmaFlag
-                  ? (gemmaFlag.highlights.length > 0
-                      ? "Already flagged for this section"
-                      : "Analyze again")
-                  : flaggingPending
-                    ? "Analyzing…"
-                    : "Run flagging on this request"
-            }
-          >
-            Flag context
-          </button>
           <button className="btn danger" onClick={onDelete} type="button">
             Delete section
           </button>
@@ -483,17 +242,6 @@ export function EditorPanel({
             />
           </div>
         </div>
-        {gemmaAvailable && flaggingPending && (
-          <div className="gemma-spinner" aria-hidden="true">
-            <span className="spinner-dot" />
-            <span>Gemma analyzing…</span>
-          </div>
-        )}
-        {!gemmaAvailable && (
-          <div className="gemma-status gemma-status-offline" aria-hidden="true">
-            <span>Gemma offline — no flagging.</span>
-          </div>
-        )}
       </div>
     </motion.aside>
   );

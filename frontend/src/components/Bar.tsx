@@ -1,5 +1,5 @@
 import { memo } from "react";
-import type { GemmaFlag, Section } from "../types";
+import type { Section } from "../types";
 
 interface Props {
   section: Section;
@@ -9,7 +9,6 @@ interface Props {
   heightPx: number;
   isSelected: boolean;
   isMarkedForDelete: boolean;
-  gemmaFlag: GemmaFlag | undefined;
   onPointerDown: (e: React.PointerEvent<SVGGElement>, index: number) => void;
   onPointerEnter: (e: React.PointerEvent<SVGGElement>, index: number) => void;
   onPointerLeave: () => void;
@@ -25,7 +24,6 @@ function BarImpl({
   heightPx,
   isSelected,
   isMarkedForDelete,
-  gemmaFlag,
   onPointerDown,
   onPointerEnter,
   onPointerLeave,
@@ -48,7 +46,6 @@ function BarImpl({
         "bar-group",
         isSelected ? "is-selected" : "",
         isMarkedForDelete ? "is-marked" : "",
-        gemmaFlag ? `has-flag flag-${gemmaFlag.severity}` : "",
       ]
         .filter(Boolean)
         .join(" ")}
@@ -99,14 +96,6 @@ function BarImpl({
           y2={y + heightPx / 2}
         />
       )}
-      {gemmaFlag && (
-        <circle
-          className="bar-flag-dot"
-          cx={barX + barW - Math.min(3, barW / 2)}
-          cy={y + Math.max(3, Math.min(6, heightPx / 2))}
-          r={Math.max(2, Math.min(3, barW / 3, heightPx / 3))}
-        />
-      )}
     </g>
   );
 }
@@ -120,7 +109,6 @@ function arePropsEqual(prev: Props, next: Props) {
     prev.heightPx === next.heightPx &&
     prev.isSelected === next.isSelected &&
     prev.isMarkedForDelete === next.isMarkedForDelete &&
-    prev.gemmaFlag === next.gemmaFlag &&
     prev.onPointerDown === next.onPointerDown &&
     prev.onPointerEnter === next.onPointerEnter &&
     prev.onPointerLeave === next.onPointerLeave &&

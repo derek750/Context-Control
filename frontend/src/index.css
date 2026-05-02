@@ -29,10 +29,6 @@
   --cl-color-marked: #a63b24;
   --cl-color-marked-stroke: #ffb199;
 
-  --cl-flag-high: #ff5b5b;
-  --cl-flag-medium: #f28c45;
-  --cl-flag-low: #d8a65f;
-
   --cl-track-thumb: rgba(217, 119, 58, 0.42);
   --cl-surface: var(--cl-panel);
 

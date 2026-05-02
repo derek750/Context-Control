@@ -1,4 +1,4 @@
-import type { GemmaFlags, NewRequest, Section, SectionType } from "../types";
+import type { NewRequest, Section, SectionType } from "../types";
 
 export function isMockMode(): boolean {
   if (typeof window === "undefined") return false;
@@ -101,7 +101,6 @@ function largeFixture(barCount = 200): NewRequest {
   const sections: Section[] = [makeSection(0, "system", SAMPLE_SYSTEM)];
   for (let i = 1; i <= barCount; i++) {
     const type = types[(i - 1) % types.length];
-    // Vary token sizes so the chart has visible peaks and valleys.
     const noise = Math.sin(i * 0.6) * 0.5 + Math.cos(i * 0.21) * 0.5;
     const baseLen = type === "tool_output" ? 1800 : type === "user" ? 240 : 700;
     const len = Math.max(40, Math.floor(baseLen * (1 + noise * 0.85)));
@@ -127,45 +126,6 @@ function largeFixture(barCount = 200): NewRequest {
   };
 }
 
-function gemmaFixture(req: NewRequest): GemmaFlags {
-  // Flag the largest tool_output and pick a believable highlight range inside.
-  const targets = req.sections
-    .filter((s) => s.sectionType === "tool_output")
-    .sort((a, b) => b.tokenCount - a.tokenCount)
-    .slice(0, 2);
-  return {
-    type: "gemma_flags",
-    requestId: req.requestId,
-    flags: targets.map((s, i) => {
-      const duplicate = findRepeatedBlockRange(s.rawContent);
-      return {
-        sectionIndex: s.index,
-        severity: i === 0 ? "high" : "medium",
-        reason:
-          duplicate != null
-            ? "Duplicate repeated block. Removing this whole repeated block preserves the surrounding snippet."
-            : "Likely redundant tool output. Review before trimming; no automatic removal range is suggested.",
-        highlights: duplicate ? [duplicate] : [],
-      };
-    }),
-  };
-}
-
-function findRepeatedBlockRange(
-  text: string,
-): { start: number; end: number } | null {
-  const marker = "import { Request, Response, NextFunction } from \"express\";";
-  const first = text.indexOf(marker);
-  if (first === -1) return null;
-  const second = text.indexOf(marker, first + marker.length);
-  if (second === -1) return null;
-  const third = text.indexOf(marker, second + marker.length);
-  return {
-    start: second,
-    end: third === -1 ? text.length : third,
-  };
-}
-
 function mountDevControls(onLoad: (size: "small" | "large") => void) {
   const host = document.createElement("div");
   host.className = "mock-dev-controls";
@@ -186,11 +146,8 @@ export function installMockHarness(): () => void {
   const load = (size: "small" | "large") => {
     const req = size === "small" ? smallFixture() : largeFixture();
     dispatch(req);
-    // Delay Gemma flags to mimic the 2–8s analysis window.
-    window.setTimeout(() => dispatch(gemmaFixture(req)), 2400);
   };
 
-  // Boot with the small fixture so first paint has something useful.
   const bootTimer = window.setTimeout(() => load("small"), 60);
   const cleanup = mountDevControls(load);
 

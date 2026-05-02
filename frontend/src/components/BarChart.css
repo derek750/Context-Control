@@ -109,16 +109,6 @@
   pointer-events: none;
 }
 
-.bar-flag-dot {
-  pointer-events: none;
-  fill: var(--cl-flag-medium);
-  stroke: var(--cl-bg-deep);
-  stroke-width: 1;
-}
-.bar-group.has-flag.flag-high .bar-flag-dot { fill: var(--cl-flag-high); }
-.bar-group.has-flag.flag-medium .bar-flag-dot { fill: var(--cl-flag-medium); }
-.bar-group.has-flag.flag-low .bar-flag-dot { fill: var(--cl-flag-low); }
-
 .chart-empty {
   position: absolute;
   inset: 0;

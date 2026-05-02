@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { GemmaFlag, Section } from "../types";
+import type { Section } from "../types";
 import { Bar } from "./Bar";
 import { Tooltip } from "./Tooltip";
 import "./BarChart.css";
@@ -81,7 +81,6 @@ interface Props {
   allSections: Section[];
   selectedIndices: Set<number>;
   markedForDelete: Set<number>;
-  gemmaFlagsByIndex: Record<number, GemmaFlag>;
   onSelect: (index: number, shift: boolean) => void;
   onOpenEditor: (index: number) => void;
 }
@@ -91,7 +90,6 @@ export function BarChart({
   allSections,
   selectedIndices,
   markedForDelete,
-  gemmaFlagsByIndex,
   onSelect,
   onOpenEditor,
 }: Props) {
@@ -354,7 +352,6 @@ export function BarChart({
                         heightPx={heightPx}
                         isSelected={selectedIndices.has(s.index)}
                         isMarkedForDelete={markedForDelete.has(s.index)}
-                        gemmaFlag={gemmaFlagsByIndex[s.index]}
                         onPointerDown={onPointerDown}
                         onPointerEnter={onPointerEnter}
                         onPointerLeave={onPointerLeave}
@@ -374,12 +371,7 @@ export function BarChart({
           </div>
         )}
       </div>
-      <Tooltip
-        section={hoverSection}
-        gemmaFlag={hoverSection ? gemmaFlagsByIndex[hoverSection.index] : undefined}
-        turnNumber={turnNumber}
-        anchor={hoverPos}
-      />
+      <Tooltip section={hoverSection} turnNumber={turnNumber} anchor={hoverPos} />
     </div>
   );
 }

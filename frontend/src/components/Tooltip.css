@@ -70,27 +70,3 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-
-.tooltip-flag {
-  margin-top: 8px;
-  padding: 8px 10px;
-  border-radius: 1px;
-  font-size: 13px;
-  line-height: 1.45;
-  background: rgba(217, 119, 58, 0.1);
-  border-left: 2px solid var(--cl-flag-medium);
-}
-.tooltip-flag.severity-high { border-left-color: var(--cl-flag-high); }
-.tooltip-flag.severity-medium { border-left-color: var(--cl-flag-medium); }
-.tooltip-flag.severity-low { border-left-color: var(--cl-flag-low); }
-
-.flag-label {
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  font-size: 11px;
-  margin-right: 6px;
-  color: var(--cl-flag-medium);
-}
-.tooltip-flag.severity-high .flag-label { color: var(--cl-flag-high); }
-.tooltip-flag.severity-low .flag-label { color: var(--cl-flag-low); }

@@ -17,7 +17,7 @@ Claude Code  →  localhost:8080 (FastAPI proxy)  →  api.anthropic.com
                VS Code Extension (Autonomy panel)
 ```
 
-The proxy sits between Claude Code and Anthropic. Every request is classified into typed sections (system prompt, tool definitions, conversation turns, tool calls/outputs, images, thinking blocks), token-counted, and streamed to the VS Code webview over WebSocket. You can delete or edit sections before they are forwarded. An optional local Gemma model (via Ollama) highlights redundant or low-value content.
+The proxy sits between Claude Code and Anthropic. Every request is classified into typed sections (system prompt, tool definitions, conversation turns, tool calls/outputs, images, thinking blocks), token-counted, and streamed to the VS Code webview over WebSocket. You can delete or edit sections before they are forwarded.
 
 ---
 
@@ -28,7 +28,6 @@ The proxy sits between Claude Code and Anthropic. Every request is classified in
 | Node.js | 18+ (LTS recommended) |
 | Python | 3.12 or 3.13 |
 | VS Code | 1.85+ |
-| Ollama *(optional)* | latest — for AI flagging |
 
 ---
 
@@ -56,24 +55,14 @@ Copy the example env file and fill in your values:
 cp .env.example .env
 ```
 
-The defaults work out of the box. If you have a Backboard.io account add those keys; everything else is optional.
+The defaults work out of the box.
 
 ```
 ANTHROPIC_UPSTREAM_URL=https://api.anthropic.com
-OLLAMA_HOST=http://localhost:11434
-OLLAMA_MODEL=gemma4:e4b
 PROXY_PORT=8080
 ```
 
-### 3. (Optional) Pull the Gemma model for AI flagging
-
-```bash
-ollama pull gemma4:e4b
-```
-
-Skip this if you don't have Ollama — the extension works fine without it.
-
-### 4. Build the frontend
+### 3. Build the frontend
 
 ```bash
 cd ../frontend
@@ -83,7 +72,7 @@ npm run build
 
 This produces `frontend/dist/` which the extension serves as a webview.
 
-### 5. Install extension dependencies and compile
+### 4. Install extension dependencies and compile
 
 ```bash
 cd ../extensions
@@ -91,7 +80,7 @@ npm install
 npm run compile
 ```
 
-### 6. Launch the extension in VS Code
+### 5. Launch the extension in VS Code
 
 You have two options — pick **A** for quick development or **B** to install Autonomy permanently in your main VS Code.
 
@@ -141,7 +130,7 @@ This packages the extension and installs it into your real VS Code so it's avail
 
    To upgrade later, rebuild the `.vsix` and re-run `code --install-extension`. To remove it, find **Autonomy** in the Extensions sidebar and click **Uninstall**.
 
-### 7. Open the Autonomy panel
+### 6. Open the Autonomy panel
 
 In whichever VS Code window has Autonomy loaded (the Extension Development Host for Option A, or any window for Option B):
 
@@ -152,7 +141,7 @@ The panel opens beside your editor and the proxy starts automatically on port 80
 
 > **Note for Option B:** the extension still expects the `backend/` and `frontend/dist/` folders to live inside your currently open workspace. If you want Autonomy available across arbitrary projects, set absolute paths in your VS Code user settings — see [Extension settings](#extension-settings) below.
 
-### 8. Point Claude Code at the proxy
+### 7. Point Claude Code at the proxy
 
 In every terminal where you run Claude Code, set:
 
@@ -232,9 +221,7 @@ Bearhacks26/
 │   ├── main.py       App entry point + WebSocket endpoint
 │   ├── interceptor.py  POST /v1/messages handler
 │   ├── classifier.py   Section classification
-│   ├── gating.py       Hold/approve/cancel state machine
-│   ├── gemma/          Ollama integration for AI flagging
-│   └── backboard/      Optional RAG memory system
+│   └── gating.py       Hold/approve/cancel state machine
 ├── frontend/         React + Vite webview
 │   └── src/
 │       ├── App.tsx         Root component
@@ -252,6 +239,6 @@ Bearhacks26/
 
 ## Tech stack
 
-**Backend** — Python 3.12, FastAPI, uvicorn, httpx, tiktoken, websockets, pydantic, Ollama SDK  
+**Backend** — Python 3.12, FastAPI, uvicorn, httpx, tiktoken, websockets, pydantic  
 **Frontend** — React 19, TypeScript, Vite, Monaco Editor, Recharts, Motion  
 **Extension** — VS Code Extension API, TypeScript, ws

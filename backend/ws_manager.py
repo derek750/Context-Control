@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 _socket: Optional[WebSocket] = None
 _lock = asyncio.Lock()
 
-# Snapshot builder is registered by main.py once gating + analyzer are wired.
+# Snapshot builder is registered by main.py once gating is wired.
 # It returns a pydantic model (or dict) that fully describes proxy state, so
 # a freshly-attached panel can resume mid-flight instead of seeing a blank
 # chart and a held request frozen in the proxy.
@@ -49,16 +49,6 @@ async def _send_snapshot(ws: WebSocket) -> None:
         logger.warning("ws: snapshot send failed: %s", exc)
 
 
-async def broadcast_snapshot() -> None:
-    """Push a fresh snapshot to the connected panel. Used when out-of-band
-    state changes (Gemma availability flipping when Ollama comes online or
-    crashes) need to reach the UI without waiting for the next reconnect."""
-    sock = _socket
-    if sock is None:
-        return
-    await _send_snapshot(sock)
-
-
 async def connect(ws: WebSocket) -> None:
     global _socket
     await ws.accept()
@@ -90,10 +80,13 @@ async def send(message: BaseModel | dict[str, Any]) -> None:
     sock = _socket
     if sock is None:
         # No silent loss: anything important should be in the snapshot so a
-        # late-joining client can recover. We log at debug because Gemma
-        # flags etc. legitimately fire when no UI is attached.
-        logger.debug("ws: send dropped (no client) type=%s",
-                     getattr(message, "type", None) if isinstance(message, BaseModel) else type(message).__name__)
+        # late-joining client can recover.
+        logger.debug(
+            "ws: send dropped (no client) type=%s",
+            getattr(message, "type", None)
+            if isinstance(message, BaseModel)
+            else type(message).__name__,
+        )
         return
     if isinstance(message, BaseModel):
         payload = message.model_dump(mode="json")

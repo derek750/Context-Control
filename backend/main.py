@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -13,18 +12,14 @@ import forwarder
 import gating
 import interceptor
 import ws_manager
-from backboard import client as backboard_client
-from gemma import analyzer
 from models import (
     Approve,
     ApproveModified,
     Cancel,
     CommitEditsNow,
-    GemmaUnavailable,
     InboundMessage,
     ModeChange,
     PauseToggle,
-    RequestFlagging,
     ResetCanonical,
     Snapshot,
 )
@@ -38,11 +33,6 @@ logging.basicConfig(
 logger = logging.getLogger("autonomy")
 
 ANTHROPIC_UPSTREAM_URL = os.getenv("ANTHROPIC_UPSTREAM_URL", "https://api.anthropic.com")
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma4:e4b")
-BACKBOARD_API_KEY = os.getenv("BACKBOARD_API_KEY", "")
-BACKBOARD_ASSISTANT_ID = os.getenv("BACKBOARD_ASSISTANT_ID", "")
-BACKBOARD_API_URL = os.getenv("BACKBOARD_API_URL", "")
 
 
 def _build_snapshot() -> Snapshot:
@@ -55,7 +45,6 @@ def _build_snapshot() -> Snapshot:
     return Snapshot(
         mode=gating_state["mode"],
         paused=gating_state["paused"],
-        gemmaAvailable=analyzer.is_available(),
         pendingRequest=held_list[0] if held_list else None,
         pendingRequests=held_list,
         latestRequest=latest,
@@ -66,31 +55,12 @@ def _build_snapshot() -> Snapshot:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     forwarder.configure(ANTHROPIC_UPSTREAM_URL)
-    analyzer.configure(OLLAMA_HOST, OLLAMA_MODEL)
-    backboard_client.configure(
-        api_key=BACKBOARD_API_KEY,
-        assistant_id=BACKBOARD_ASSISTANT_ID,
-        base_url=BACKBOARD_API_URL or None,
-    )
     ws_manager.register_snapshot_builder(_build_snapshot)
     await forwarder.startup()
-    await backboard_client.startup()
-    await analyzer.probe()
-    # Periodic re-probe so the UI auto-recovers when Ollama is started after
-    # the backend (or restarts mid-session). Without this, the startup probe
-    # latches `_available=False` forever.
-    analyzer.start_probe_loop()
-    logger.info(
-        "autonomy proxy ready (upstream=%s, gemma_available=%s, backboard=%s)",
-        ANTHROPIC_UPSTREAM_URL,
-        analyzer.is_available(),
-        backboard_client.is_configured(),
-    )
+    logger.info("autonomy proxy ready (upstream=%s)", ANTHROPIC_UPSTREAM_URL)
     try:
         yield
     finally:
-        await analyzer.stop_probe_loop()
-        await backboard_client.shutdown()
         await forwarder.shutdown()
 
 
@@ -108,14 +78,6 @@ async def _dispatch(msg: InboundMessage) -> None:
         gating.set_mode(msg.mode)
     elif isinstance(msg, PauseToggle):
         gating.set_pause(msg.paused)
-    elif isinstance(msg, RequestFlagging):
-        sections = interceptor.recent_sections.get(msg.requestId, [])
-        if not sections:
-            return
-        section = next((s for s in sections if s.index == msg.sectionIndex), None)
-        if section is None:
-            return
-        asyncio.create_task(analyzer.flag_for_section(request_id=msg.requestId, section=section))
     elif isinstance(msg, ResetCanonical):
         await conversation_state.reset_edits()
         await interceptor.broadcast_canonical_snapshot()

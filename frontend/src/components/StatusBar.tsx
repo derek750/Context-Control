@@ -15,7 +15,6 @@ interface Props {
   totalCost: number;
   hasEdits: boolean;
   canUndo: boolean;
-  gemmaUnavailable: boolean;
   onModeChange: (mode: Mode) => void;
   onTogglePause: () => void;
   onSend: () => void;
@@ -44,7 +43,6 @@ export function StatusBar({
   totalCost,
   hasEdits,
   canUndo,
-  gemmaUnavailable,
   onModeChange,
   onTogglePause,
   onSend,
@@ -90,20 +88,6 @@ export function StatusBar({
           >
             <span className="warning-icon" aria-hidden="true">!</span>
             Claude Code may timeout. Send or cancel.
-          </motion.div>
-        )}
-      </AnimatePresence>
-      <AnimatePresence>
-        {gemmaUnavailable && (
-          <motion.div
-            className="gemma-notice"
-            role="status"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 6 }}
-            transition={{ duration: 0.18 }}
-          >
-            Install Ollama + Gemma 4 for smart flagging.
           </motion.div>
         )}
       </AnimatePresence>

@@ -1,9 +1,9 @@
-import type { OutboundMessage, PersistedState } from "./types";
+import type { OutboundMessage } from "./types";
 
 interface VsCodeApi {
   postMessage(msg: OutboundMessage): void;
-  getState<T = PersistedState>(): T | undefined;
-  setState<T = PersistedState>(state: T): void;
+  getState<T = unknown>(): T | undefined;
+  setState<T = unknown>(state: T): void;
 }
 
 declare global {
@@ -18,7 +18,7 @@ function createStubApi(): VsCodeApi {
   return {
     postMessage(msg) {
       // Outside the webview (e.g. plain `vite dev`), surface outbound traffic
-      // so the developer can verify shapes match PRD §9.
+      // so the developer can verify shapes.
       console.log("[vscode-stub] postMessage", msg);
     },
     getState<T>() {

@@ -1,11 +1,10 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useLayoutEffect, useRef, useState } from "react";
-import type { GemmaFlag, Section } from "../types";
+import type { Section } from "../types";
 import "./Tooltip.css";
 
 interface Props {
   section: Section | null;
-  gemmaFlag: GemmaFlag | undefined;
   turnNumber: number;
   anchor: { x: number; y: number } | null;
 }
@@ -45,7 +44,7 @@ function clampToViewport(
   return { x: Math.max(margin, x), y };
 }
 
-export function Tooltip({ section, gemmaFlag, turnNumber, anchor }: Props) {
+export function Tooltip({ section, turnNumber, anchor }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ w: 280, h: 160 });
 
@@ -92,11 +91,6 @@ export function Tooltip({ section, gemmaFlag, turnNumber, anchor }: Props) {
             <span className="tooltip-val">{turnNumber}</span>
           </div>
           <div className="tooltip-preview">{section!.contentPreview}</div>
-          {gemmaFlag && (
-            <div className={`tooltip-flag severity-${gemmaFlag.severity}`}>
-              <span className="flag-label">Gemma</span> {gemmaFlag.reason}
-            </div>
-          )}
         </motion.div>
       )}
     </AnimatePresence>

@@ -1,5 +1,4 @@
 // Canonical message contracts shared with the proxy / extension host.
-// Keep these byte-for-byte aligned with PRD §9 — do not redefine elsewhere.
 
 export type SectionType =
   | "system"
@@ -40,30 +39,12 @@ export interface NewRequest {
   createdAt?: number;
 }
 
-export interface GemmaFlag {
-  sectionIndex: number;
-  severity: "high" | "medium" | "low";
-  reason: string;
-  highlights: Array<{ start: number; end: number }>;
-}
-
-export interface GemmaFlags {
-  type: "gemma_flags";
-  requestId: string;
-  flags: GemmaFlag[];
-}
-
-export interface GemmaUnavailable {
-  type: "gemma_unavailable";
-}
-
 export type Mode = "auto_send" | "ask_permission";
 
 export interface Snapshot {
   type: "snapshot";
   mode: Mode;
   paused: boolean;
-  gemmaAvailable: boolean;
   pendingRequest: NewRequest | null;
   // All requests currently held for approval, oldest first. `pendingRequest`
   // above is the head of this list (kept for back-compat).
@@ -79,8 +60,6 @@ export interface TimeoutWarning {
 
 export type InboundMessage =
   | NewRequest
-  | GemmaFlags
-  | GemmaUnavailable
   | Snapshot
   | TimeoutWarning;
 
@@ -111,12 +90,6 @@ export interface PauseToggle {
   paused: boolean;
 }
 
-export interface RequestFlagging {
-  type: "request_flagging";
-  requestId: string;
-  sectionIndex: number;
-}
-
 export interface CommitEditsNow {
   type: "commit_edits_now";
   requestId: string;
@@ -129,9 +102,4 @@ export type OutboundMessage =
   | ModifiedRequest
   | ModeChange
   | PauseToggle
-  | RequestFlagging
   | CommitEditsNow;
-
-export interface PersistedState {
-  gemmaUnavailableNoticeShown: boolean;
-}
