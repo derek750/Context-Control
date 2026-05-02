@@ -69,7 +69,7 @@ export class WebviewProvider {
     // asWebviewUri so the webview can fetch them.
     html = html.replace(
       /(src|href)="(\.\/|\/)?(assets\/[^"]+|[^"]+\.(?:js|css|svg|png|ico|woff2?))"/g,
-      (_match, attr, _prefix, asset) => {
+      (_match: string, attr: string, _prefix: string | undefined, asset: string) => {
         const onDisk = vscode.Uri.file(path.join(distDir, asset));
         return `${attr}="${webview.asWebviewUri(onDisk)}"`;
       },

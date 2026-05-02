@@ -107,6 +107,7 @@ function reducer(state: AppState, action: Action): AppState {
       if (
         state.currentRequest &&
         state.currentRequest.held &&
+        msg.held &&
         state.currentRequest.requestId !== msg.requestId
       ) {
         return { ...state, pendingQueue: [...state.pendingQueue, msg] };

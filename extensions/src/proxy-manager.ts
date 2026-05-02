@@ -28,10 +28,8 @@ export class ProxyManager {
       throw new Error(`backend/main.py not found in ${backendDir}.`);
     }
 
-    const venvPython = path.join(backendDir, "venv", "bin", "python");
-    const python =
-      cfg.get<string>("pythonPath") ||
-      (fs.existsSync(venvPython) ? venvPython : "python3");
+    const configured = cfg.get<string>("pythonPath")?.trim() ?? "";
+    const python = configured || resolveVenvPython(backendDir);
 
     this.output.appendLine(
       `[proxy] starting: ${python} -m uvicorn main:app --port ${port} (cwd=${backendDir})`,
@@ -43,8 +41,11 @@ export class ProxyManager {
       { cwd: backendDir },
     );
 
-    this.proc.stdout.on("data", (b) => this.output.append(`[proxy] ${b}`));
-    this.proc.stderr.on("data", (b) => this.output.append(`[proxy] ${b}`));
+    this.proc.stdout.on("data", (b: Buffer) => this.output.append(`[proxy] ${b}`));
+    this.proc.stderr.on("data", (b: Buffer) => this.output.append(`[proxy] ${b}`));
+    this.proc.on("error", (err: NodeJS.ErrnoException) => {
+      this.output.appendLine(`[proxy] spawn failed: ${err.message}`);
+    });
     this.proc.on("exit", (code, signal) => {
       this.output.appendLine(`[proxy] exited code=${code} signal=${signal}`);
       this.proc = null;
@@ -79,6 +80,49 @@ export class ProxyManager {
       });
     });
   }
+}
+
+/** Prefer `pyvenv.cfg` `executable=` — matches the interpreter that owns site-packages.
+ * `venv/bin/python` is sometimes a broken symlink (wrong Python → uvicorn missing). */
+function readPyvenvExecutable(backendDir: string): string | null {
+  const cfgPath = path.join(backendDir, "venv", "pyvenv.cfg");
+  if (!fs.existsSync(cfgPath)) {
+    return null;
+  }
+  try {
+    const text = fs.readFileSync(cfgPath, "utf8");
+    const match = text.match(/^\s*executable\s*=\s*(.+)$/m);
+    if (!match) {
+      return null;
+    }
+    const exe = match[1].trim();
+    return fs.existsSync(exe) ? exe : null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveVenvPython(backendDir: string): string {
+  const fromCfg = readPyvenvExecutable(backendDir);
+  if (fromCfg) {
+    return fromCfg;
+  }
+  const win = process.platform === "win32";
+  const candidates = win
+    ? [
+        path.join(backendDir, "venv", "Scripts", "python.exe"),
+        path.join(backendDir, "venv", "Scripts", "python3.exe"),
+      ]
+    : [
+        path.join(backendDir, "venv", "bin", "python3"),
+        path.join(backendDir, "venv", "bin", "python"),
+      ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) {
+      return c;
+    }
+  }
+  return win ? "python" : "python3";
 }
 
 function waitForPort(host: string, port: number, timeoutMs: number): Promise<void> {

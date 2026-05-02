@@ -188,3 +188,23 @@ async def update_canonical(new_body: dict[str, Any]) -> None:
         )
 
 
+async def ack_streamed_messages_appended(count: int) -> None:
+    """Advance `_last_seen_message_count` after injecting streamed assistant
+    message(s) into canonical outside `sync()`.
+
+    Claude Code's next request replays the full messages array including that
+    assistant; without bumping last_seen, `sync()` would append the same
+    assistant again."""
+    global _last_seen_message_count
+    if count <= 0:
+        return
+    async with _lock:
+        _last_seen_message_count += count
+        logger.info(
+            "conversation_state: ack_streamed_messages_appended "
+            "count=%d last_seen=%d",
+            count,
+            _last_seen_message_count,
+        )
+
+

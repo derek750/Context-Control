@@ -15,7 +15,7 @@ import conversation_state
 import forwarder
 import gating
 import ws_manager
-from models import NewRequest, Section
+from models import NewRequest, RequestKind, Section
 
 logger = logging.getLogger(__name__)
 
@@ -103,12 +103,11 @@ def _push_history(req: NewRequest) -> None:
         _history.pop(0)
 
 
-async def broadcast_canonical_snapshot() -> None:
+async def broadcast_canonical_snapshot(*, kind: RequestKind = "top_level") -> None:
     """Re-classify the current canonical and push it to the panel as a
-    synthesized top-level NewRequest. Used after Reset Edits and after
-    auto-mode commit_edits_now, so the chart re-renders immediately
-    without waiting for Claude Code's next call. No-op if canonical is
-    empty (no requests have flowed through yet)."""
+    synthesized NewRequest. Used after Reset Edits, commit_edits_now, and
+    after streaming completes so the chart re-renders without waiting for the
+    next Claude Code call. No-op if canonical is empty."""
     global _latest_request
     body = await conversation_state.get_canonical()
     if not body:
@@ -123,7 +122,7 @@ async def broadcast_canonical_snapshot() -> None:
         totalCost=total_cost,
         model=model,
         held=False,
-        kind="top_level",
+        kind=kind,
         lastUserPreview=_last_user_preview(body.get("messages", [])),
         createdAt=time.time(),
     )

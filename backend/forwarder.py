@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any, AsyncIterator, Optional
+from typing import Any, AsyncIterator, Optional, Union
 
 import httpx
 from fastapi import Request
@@ -18,6 +18,17 @@ _client: Optional[httpx.AsyncClient] = None
 _upstream: str = "https://api.anthropic.com"
 
 _HOP_BY_HOP = {"host", "content-length", "connection", "keep-alive", "transfer-encoding"}
+
+# Strong references to the fire-and-forget post-stream broadcast tasks. Without
+# this, asyncio.create_task() returns a task that the event loop only weakly
+# references — once `body_iter`'s finally returns and the local task variable
+# falls out of scope, the task can be garbage-collected before it ever runs.
+# That's the failure mode where the UI never sees the assistant turn until the
+# user prompts again (because the next sync() is what re-discovers it). See
+# https://docs.python.org/3/library/asyncio-task.html#asyncio.create_task.
+_pending_broadcast_tasks: set[asyncio.Task[None]] = set()
+
+AssistantContent = Union[str, list[dict[str, Any]]]
 
 
 def configure(upstream_url: str) -> None:
@@ -51,53 +62,186 @@ def _client_or_raise() -> httpx.AsyncClient:
     return _client
 
 
-async def _parse_response_stream(
-    upstream: httpx.Response, body: dict[str, Any]
-) -> tuple[AsyncIterator[bytes], Optional[str]]:
-    """Parse the SSE stream and extract the final assistant message.
+class _AssistantStreamCapture:
+    """Reconstruct Anthropic Messages API assistant `content` from SSE events."""
 
-    Returns a tuple of (byte iterator for client, assistant text content or None).
-    We capture the response in a buffer so we can both stream it to the client
-    and extract the final assistant message to add to the UI.
-    """
-    buffer: list[bytes] = []
-    assistant_text: list[str] = []
-    in_message_delta = False
+    def __init__(self) -> None:
+        self._blocks: dict[int, dict[str, Any]] = {}
 
-    async def body_iter_with_capture() -> AsyncIterator[bytes]:
-        nonlocal in_message_delta
+    def _ensure_block_for_delta(self, idx: int, dt: Optional[str]) -> dict[str, Any]:
+        """Create a block when deltas arrive before content_block_start (chunking
+        edge cases)."""
+        existing = self._blocks.get(idx)
+        if existing is not None:
+            return existing
+        if dt == "text_delta":
+            self._blocks[idx] = {"type": "text", "text": ""}
+        elif dt in ("thinking_delta", "signature_delta"):
+            self._blocks[idx] = {"type": "thinking", "thinking": ""}
+        elif dt == "input_json_delta":
+            self._blocks[idx] = {
+                "type": "tool_use",
+                "id": "",
+                "name": "",
+                "input_json": "",
+                "input_preset": None,
+            }
+        else:
+            self._blocks[idx] = {"type": "unsupported", "start": {}}
+        return self._blocks[idx]
+
+    def consume_sse_line(self, line: str) -> None:
+        line = line.strip()
+        if not line.startswith("data:"):
+            return
+        payload = line.removeprefix("data:").strip()
+        if not payload or payload == "[DONE]":
+            return
         try:
-            async for chunk in upstream.aiter_raw():
-                buffer.append(chunk)
-                yield chunk
+            event = json.loads(payload)
+        except json.JSONDecodeError:
+            return
 
-                # Parse SSE events to track assistant message content
-                chunk_str = chunk.decode("utf-8", errors="ignore")
-                for line in chunk_str.split("\n"):
-                    line = line.strip()
-                    if line.startswith("data: "):
-                        try:
-                            event = json.loads(line[6:])
-                            event_type = event.get("type", "")
+        et = event.get("type")
+        if et == "content_block_start":
+            try:
+                idx = int(event["index"])
+            except (KeyError, TypeError, ValueError):
+                return
+            cb = event.get("content_block")
+            if not isinstance(cb, dict):
+                cb = {}
+            btype = cb.get("type")
+            if btype == "text":
+                self._blocks[idx] = {"type": "text", "text": ""}
+            elif btype == "thinking":
+                self._blocks[idx] = {"type": "thinking", "thinking": ""}
+            elif btype == "redacted_thinking":
+                data = cb.get("data")
+                self._blocks[idx] = {
+                    "type": "thinking",
+                    "thinking": data if isinstance(data, str) else "",
+                }
+            elif btype == "tool_use":
+                raw_input = cb.get("input")
+                self._blocks[idx] = {
+                    "type": "tool_use",
+                    "id": cb.get("id") or "",
+                    "name": cb.get("name") or "",
+                    "input_json": "",
+                    "input_preset": raw_input if isinstance(raw_input, dict) else None,
+                }
+            else:
+                self._blocks[idx] = {"type": "unsupported", "start": cb}
 
-                            if event_type == "content_block_delta":
-                                delta = event.get("delta", {})
-                                if delta.get("type") == "text_delta":
-                                    text = delta.get("text", "")
-                                    if text:
-                                        assistant_text.append(text)
-                                        in_message_delta = True
+        elif et == "content_block_delta":
+            try:
+                idx = int(event["index"])
+            except (KeyError, TypeError, ValueError):
+                return
+            delta = event.get("delta")
+            if not isinstance(delta, dict):
+                return
+            dt = delta.get("type")
+            if isinstance(dt, str) and dt == "signature_delta":
+                # Integrity signature for extended thinking; not message content.
+                self._ensure_block_for_delta(idx, dt)
+                return
+            block = self._ensure_block_for_delta(
+                idx, dt if isinstance(dt, str) else None
+            )
+            if dt == "text_delta":
+                block["text"] = block.get("text", "") + (delta.get("text") or "")
+            elif dt == "thinking_delta":
+                block["thinking"] = block.get("thinking", "") + (
+                    delta.get("thinking") or ""
+                )
+            elif dt == "input_json_delta":
+                block["input_json"] = block.get("input_json", "") + (
+                    delta.get("partial_json") or ""
+                )
 
-                            elif event_type == "message_stop":
-                                in_message_delta = False
-                        except (json.JSONDecodeError, KeyError):
-                            pass
-        except (httpx.ReadError, httpx.RemoteProtocolError) as exc:
-            logger.warning("forwarder: upstream stream broke: %s", exc)
+        elif et == "content_block_stop":
+            try:
+                idx = int(event["index"])
+            except (KeyError, TypeError, ValueError):
+                return
+            block = self._blocks.get(idx)
+            if not block or block.get("type") != "tool_use":
+                return
+            raw = block.get("input_json") or ""
+            preset = block.get("input_preset")
+            if raw.strip():
+                try:
+                    block["input"] = json.loads(raw)
+                except json.JSONDecodeError:
+                    block["input"] = {}
+            elif isinstance(preset, dict):
+                block["input"] = preset
+            else:
+                block["input"] = {}
+            block.pop("input_json", None)
+            block.pop("input_preset", None)
 
-    # Return the iterator and the extracted assistant text (will be empty until
-    # the stream is consumed)
-    return body_iter_with_capture(), "".join(assistant_text) if assistant_text else None
+    def build_assistant_content(self) -> Optional[AssistantContent]:
+        if not self._blocks:
+            return None
+        out: list[dict[str, Any]] = []
+        for idx in sorted(self._blocks.keys()):
+            block = self._blocks[idx]
+            if block.get("type") == "tool_use" and "input" not in block:
+                raw = block.get("input_json") or ""
+                preset = block.get("input_preset")
+                if raw.strip():
+                    try:
+                        block["input"] = json.loads(raw)
+                    except json.JSONDecodeError:
+                        block["input"] = {}
+                elif isinstance(preset, dict):
+                    block["input"] = preset
+                else:
+                    block["input"] = {}
+                block.pop("input_json", None)
+                block.pop("input_preset", None)
+            bt = block.get("type")
+            if bt == "text":
+                text = block.get("text") or ""
+                if text:
+                    out.append({"type": "text", "text": text})
+            elif bt == "thinking":
+                thinking = block.get("thinking") or ""
+                if thinking:
+                    out.append({"type": "thinking", "thinking": thinking})
+            elif bt == "tool_use":
+                out.append(
+                    {
+                        "type": "tool_use",
+                        "id": block.get("id") or "",
+                        "name": block.get("name") or "",
+                        "input": block.get("input", {}),
+                    }
+                )
+        if not out:
+            return None
+        if len(out) == 1 and out[0].get("type") == "text":
+            return out[0].get("text") or ""
+        return out
+
+
+def _assistant_content_nonempty(content: AssistantContent) -> bool:
+    if isinstance(content, str):
+        return bool(content.strip())
+    return len(content) > 0
+
+
+def _log_canonical_task(task: asyncio.Task) -> None:
+    """Surface failures from fire-and-forget canonical updates."""
+    try:
+        exc = task.exception()
+    except asyncio.CancelledError:
+        return
+    if exc is not None:
+        logger.error("forwarder: add_response task failed", exc_info=exc)
 
 
 async def forward_messages(body: dict[str, Any], headers: dict[str, str]) -> Response:
@@ -109,6 +253,13 @@ async def forward_messages(body: dict[str, Any], headers: dict[str, str]) -> Res
     body = gating.prune_orphan_tool_pairs(body)
     payload = json.dumps(body).encode("utf-8")
     fwd_headers = _filter_request_headers(headers)
+    # Force an uncompressed response from Anthropic so the SSE parser below
+    # actually sees text. Claude Code (and most HTTP libraries) send
+    # `accept-encoding: gzip, br` by default — without this override, httpx's
+    # `aiter_raw()` yields gzip/brotli bytes, our SSE capture extracts nothing,
+    # and the post-stream broadcast that updates the chart with the assistant
+    # turn never fires.
+    fwd_headers["accept-encoding"] = "identity"
     fwd_headers["content-type"] = "application/json"
 
     client = _client_or_raise()
@@ -125,7 +276,8 @@ async def forward_messages(body: dict[str, Any], headers: dict[str, str]) -> Res
     async def body_iter() -> AsyncIterator[bytes]:
         gating.stream_in_flight += 1
         decremented = False
-        assistant_content: list[str] = []
+        capture = _AssistantStreamCapture()
+        line_carry = ""
 
         def _release() -> None:
             nonlocal decremented
@@ -135,48 +287,49 @@ async def forward_messages(body: dict[str, Any], headers: dict[str, str]) -> Res
 
         try:
             async for chunk in upstream.aiter_raw():
-                # Parse response stream to capture assistant message
                 try:
-                    chunk_str = chunk.decode("utf-8", errors="ignore")
-                    for line in chunk_str.split("\n"):
-                        line = line.strip()
-                        if line.startswith("data: "):
-                            event = json.loads(line[6:])
-                            if event.get("type") == "content_block_delta":
-                                delta = event.get("delta", {})
-                                if delta.get("type") == "text_delta":
-                                    text = delta.get("text", "")
-                                    if text:
-                                        assistant_content.append(text)
-                except (json.JSONDecodeError, UnicodeDecodeError):
+                    chunk_str = line_carry + chunk.decode("utf-8", errors="ignore")
+                    parts = chunk_str.split("\n")
+                    line_carry = parts.pop()
+                    for line in parts:
+                        capture.consume_sse_line(line)
+                except UnicodeDecodeError:
                     pass
 
                 yield chunk
         except (httpx.ReadError, httpx.RemoteProtocolError) as exc:
             logger.warning("forwarder: upstream stream broke: %s", exc)
         finally:
-            # Decrement first — if aclose() blocks or raises, we still don't
-            # want stream_in_flight to leak, otherwise Gemma's _wait_for_idle
-            # spins forever.
             _release()
+            if line_carry.strip():
+                capture.consume_sse_line(line_carry)
             try:
                 await upstream.aclose()
             except Exception:
                 pass
 
-            # After stream completes, add assistant response to canonical
-            # and broadcast updated chart to UI
-            if assistant_content:
-                full_text = "".join(assistant_content)
-                if full_text.strip():
-                    try:
-                        asyncio.create_task(
-                            _add_response_to_canonical_and_broadcast(full_text)
-                        )
-                    except Exception as exc:
-                        logger.warning(
-                            "forwarder: failed to add response to canonical: %s", exc
-                        )
+            merged = capture.build_assistant_content()
+            if merged is None or not _assistant_content_nonempty(merged):
+                logger.info(
+                    "forwarder: stream finished with no assistant content "
+                    "to broadcast (status=%d)",
+                    upstream.status_code,
+                )
+            else:
+                try:
+                    t = asyncio.create_task(
+                        _add_response_to_canonical_and_broadcast(merged),
+                    )
+                    # Hold a strong ref so the GC doesn't reap the task before
+                    # it runs (asyncio only keeps weak refs to tasks).
+                    _pending_broadcast_tasks.add(t)
+                    t.add_done_callback(_pending_broadcast_tasks.discard)
+                    t.add_done_callback(_log_canonical_task)
+                except Exception as exc:
+                    logger.warning(
+                        "forwarder: failed to add response to canonical: %s",
+                        exc,
+                    )
 
     return StreamingResponse(
         body_iter(),
@@ -186,11 +339,10 @@ async def forward_messages(body: dict[str, Any], headers: dict[str, str]) -> Res
     )
 
 
-async def _add_response_to_canonical_and_broadcast(assistant_text: str) -> None:
+async def _add_response_to_canonical_and_broadcast(content: AssistantContent) -> None:
     """Add the assistant response to the canonical conversation and broadcast
     the updated chart to the UI."""
     try:
-        # Get current canonical
         canonical = await conversation_state.get_canonical()
         if not canonical or "messages" not in canonical:
             logger.warning("forwarder: canonical empty or invalid, skipping response")
@@ -200,25 +352,23 @@ async def _add_response_to_canonical_and_broadcast(assistant_text: str) -> None:
         if not isinstance(messages, list):
             return
 
-        # Add assistant message to the canonical
-        assistant_msg = {
-            "role": "assistant",
-            "content": assistant_text,
-        }
+        assistant_msg: dict[str, Any] = {"role": "assistant", "content": content}
         messages.append(assistant_msg)
 
-        # Update canonical with the new assistant message
         await conversation_state.update_canonical(canonical)
+        await conversation_state.ack_streamed_messages_appended(1)
 
-        # Import and call the broadcast function from interceptor to avoid circular dependency
         from interceptor import broadcast_canonical_snapshot
 
-        await broadcast_canonical_snapshot()
+        await broadcast_canonical_snapshot(kind="tool_chain")
 
+        if isinstance(content, str):
+            log_detail = f"text_len={len(content)}"
+        else:
+            log_detail = f"blocks={len(content)}"
         logger.info(
-            "forwarder: added assistant response to canonical "
-            "and broadcasted updated chart (text_len=%d)",
-            len(assistant_text),
+            "forwarder: added assistant response to canonical and broadcast (%s)",
+            log_detail,
         )
     except Exception as exc:
         logger.exception("forwarder: failed to add response to canonical: %s", exc)

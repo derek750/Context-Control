@@ -74,7 +74,7 @@ export class WebSocketBridge implements vscode.Disposable {
       this.output.appendLine("[ws] closed");
       this.scheduleReconnect();
     });
-    ws.on("error", (err) => {
+    ws.on("error", (err: Error) => {
       this.output.appendLine(`[ws] error: ${err.message}`);
     });
   }
