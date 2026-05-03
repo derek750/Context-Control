@@ -38,9 +38,13 @@ export class WebSocketBridge implements vscode.Disposable {
   }
 
   detachWebview() {
+    const hadWebview = this.webview !== null;
     this.webviewSub?.dispose();
     this.webviewSub = null;
     this.webview = null;
+    if (hadWebview) {
+      this.output.appendLine("[ws] detached from panel (connection to proxy stays open)");
+    }
   }
 
   private cycleConnection(reason: string) {
@@ -71,7 +75,11 @@ export class WebSocketBridge implements vscode.Disposable {
       }
     });
     ws.on("close", () => {
-      this.output.appendLine("[ws] closed");
+      if (this.disposed) {
+        this.output.appendLine("[ws] connection closed");
+        return;
+      }
+      this.output.appendLine("[ws] disconnected (reconnecting…)");
       this.scheduleReconnect();
     });
     ws.on("error", (err: Error) => {
@@ -88,10 +96,18 @@ export class WebSocketBridge implements vscode.Disposable {
   }
 
   dispose() {
+    if (this.disposed) return;
     this.disposed = true;
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
     this.webviewSub?.dispose();
-    this.ws?.close();
+    this.webviewSub = null;
+    this.webview = null;
+    try {
+      this.ws?.close();
+    } catch {
+      // ignore
+    }
     this.ws = null;
   }
 }

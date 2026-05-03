@@ -15,7 +15,7 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(output);
 
   proxyManager = new ProxyManager(output, context);
-  provider = new WebviewProvider(context, output);
+  provider = new WebviewProvider(context);
 
   const openCmd = vscode.commands.registerCommand("autonomy.open", async () => {
     const cfg = vscode.workspace.getConfiguration("autonomy");
@@ -44,6 +44,7 @@ export async function activate(context: vscode.ExtensionContext) {
     }
     bridge.attachWebview(panel.webview);
     panel.onDidDispose(() => {
+      output.appendLine("[autonomy] panel closed");
       bridge?.detachWebview();
     });
   });
@@ -90,11 +91,32 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(openCmd, restartCmd, retrySetupCmd);
+
+  // Disposables run in reverse registration order when the window closes. Register
+  // this last so it runs first: stop WS reconnect, close webview, SIGTERM uvicorn.
+  context.subscriptions.push(
+    new vscode.Disposable(() => {
+      output?.appendLine("[autonomy] shutting down (subscription dispose)");
+      bridge?.dispose();
+      provider?.dispose();
+      proxyManager?.disposeSync();
+    }),
+  );
+}
+
+/** Full async teardown when the extension host calls `deactivate`. */
+async function shutdownExtensionHostResources(reason: string): Promise<void> {
+  output?.appendLine(`[autonomy] shutting down (${reason})`);
+  bridge?.dispose();
+  provider?.dispose();
+  await proxyManager?.stop();
+  bridge = null;
+  provider = null;
+  proxyManager = null;
 }
 
 export async function deactivate() {
-  await bridge?.dispose();
-  await proxyManager?.stop();
+  await shutdownExtensionHostResources("deactivate");
 }
 
 /**

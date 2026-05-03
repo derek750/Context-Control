@@ -8,10 +8,15 @@ import * as path from "path";
 export class WebviewProvider {
   private panel: vscode.WebviewPanel | null = null;
 
-  constructor(
-    private readonly context: vscode.ExtensionContext,
-    private readonly output: vscode.OutputChannel,
-  ) {}
+  constructor(private readonly context: vscode.ExtensionContext) {}
+
+  /** Close the panel if open (e.g. extension / window shutdown). */
+  dispose(): void {
+    if (this.panel) {
+      this.panel.dispose();
+      this.panel = null;
+    }
+  }
 
   show(): vscode.WebviewPanel {
     if (this.panel) {

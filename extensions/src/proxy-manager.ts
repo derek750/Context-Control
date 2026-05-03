@@ -50,7 +50,7 @@ export class ProxyManager {
       this.output.appendLine(`[proxy] spawn failed: ${err.message}`);
     });
     this.proc.on("exit", (code, signal) => {
-      this.output.appendLine(`[proxy] exited code=${code} signal=${signal}`);
+      this.output.appendLine(`[proxy] stopped (exit ${code}, signal ${signal ?? "none"})`);
       this.proc = null;
     });
 
@@ -68,6 +68,7 @@ export class ProxyManager {
   async stop(): Promise<void> {
     const p = this.proc;
     if (!p) return;
+    this.output.appendLine("[proxy] stopping…");
     this.proc = null;
     p.kill("SIGTERM");
     await new Promise<void>((resolve) => {
@@ -82,6 +83,28 @@ export class ProxyManager {
         resolve();
       });
     });
+  }
+
+  /**
+   * Synchronous best-effort kill for subscription dispose / emergency teardown.
+   * `stop()` remains the graceful path with exit wait.
+   */
+  disposeSync(): void {
+    const p = this.proc;
+    if (!p) return;
+    this.proc = null;
+    try {
+      p.kill("SIGTERM");
+    } catch {
+      // ignore
+    }
+    setTimeout(() => {
+      try {
+        p.kill("SIGKILL");
+      } catch {
+        // already exited
+      }
+    }, 2000);
   }
 }
 

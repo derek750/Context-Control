@@ -161,6 +161,10 @@ async function tryFastPath(
 
   const pythonExec = venvExecutable(cachedVenv);
   if (!fs.existsSync(pythonExec)) return null;
+  if (!(await venvHasUsablePip(pythonExec))) {
+    output.appendLine("[bootstrap] cached venv has no pip; will rebuild.");
+    return null;
+  }
 
   // Quick sanity: verify uvicorn is importable
   try {
@@ -186,13 +190,21 @@ async function discoverBaseInterpreter(
 async function buildCandidates(output: vscode.OutputChannel): Promise<string[]> {
   const results: string[] = [];
 
-  // 1. Microsoft Python extension
+  // 1. On Unix, try explicit `python3.N` before the Python extension and bare
+  // `python3`. The extension's "active" interpreter is often Homebrew's `python3`
+  // (e.g. 3.14) with broken ensurepip; `python3.13` is typically fine when both exist.
+  if (process.platform !== "win32") {
+    for (const minor of [13, 12, 11, 10]) {
+      results.push(`python3.${minor}`);
+    }
+  }
+
+  // 2. Microsoft Python extension (after versioned shims on Unix)
   const fromPyExt = await tryPythonExtensionInterpreter(output);
   if (fromPyExt) results.push(fromPyExt);
 
-  // 2. PATH candidates
+  // 3. Remaining PATH candidates
   if (process.platform === "win32") {
-    // Windows: prefer py launcher, then plain names
     results.push("py", "python3", "python");
   } else {
     results.push("python3", "python");
@@ -272,15 +284,38 @@ async function meetsMinimum(
   }
 }
 
+async function venvHasUsablePip(venvPython: string): Promise<boolean> {
+  try {
+    await execFileAsync(venvPython, ["-m", "pip", "--version"], { timeout: 8000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function removeManagedVenvTree(venvRoot: string, output: vscode.OutputChannel): void {
+  output.appendLine(`[bootstrap] removing broken or incomplete venv at ${venvRoot}…`);
+  try {
+    fs.rmSync(venvRoot, { recursive: true, force: true });
+  } catch (e) {
+    output.appendLine(`[bootstrap] could not remove venv dir: ${e}`);
+  }
+}
+
 async function createVenv(
   basePython: string,
   venvRoot: string,
   output: vscode.OutputChannel,
 ): Promise<EnsureResult> {
-  // Idempotent: only create if no pyvenv.cfg
-  if (fs.existsSync(path.join(venvRoot, "pyvenv.cfg"))) {
-    output.appendLine("[bootstrap] venv already exists, skipping creation.");
-    return { ok: true, pythonExec: venvExecutable(venvRoot), venvRoot };
+  const cfgPath = path.join(venvRoot, "pyvenv.cfg");
+  if (fs.existsSync(cfgPath)) {
+    const py = venvExecutable(venvRoot);
+    if (await venvHasUsablePip(py)) {
+      output.appendLine("[bootstrap] venv already exists, skipping creation.");
+      return { ok: true, pythonExec: py, venvRoot };
+    }
+    removeManagedVenvTree(venvRoot, output);
+    fs.mkdirSync(venvRoot, { recursive: true });
   }
   try {
     const args =
@@ -290,10 +325,17 @@ async function createVenv(
     await execFileAsync(basePython, args, { timeout: 60_000 });
     return { ok: true, pythonExec: venvExecutable(venvRoot), venvRoot };
   } catch (e) {
+    const hint =
+      process.platform === "darwin"
+        ? " Try setting Autonomy › Python: Path to a stable interpreter (e.g. /opt/homebrew/bin/python3.13)."
+        : " Try setting Autonomy › Python: Path to Python 3.10–3.13 from python.org or your package manager.";
+    output.appendLine(
+      `[bootstrap] venv creation failed (often ensurepip).${hint} Full error: ${e}`,
+    );
     return {
       ok: false,
       reason: "VENV_CREATE_FAILED",
-      detail: `Could not create venv at ${venvRoot}: ${e}`,
+      detail: `Could not create venv at ${venvRoot}: ${e}.${hint}`,
     };
   }
 }
