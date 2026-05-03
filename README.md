@@ -40,8 +40,6 @@ The proxy sits between Claude Code and Anthropic. Every request is classified in
 
 ## Run locally
 
-Build and install from a **VSIX** so you run the same bundled webview and backend as a Marketplace release.
-
 ### 1. Clone the repo and install Node dependencies
 
 ```bash
@@ -53,8 +51,6 @@ cd ../extensions && npm install
 
 ### 2. Build and package
 
-From `extensions/`, `npx @vscode/vsce package` runs **`vscode:prepublish`**, which executes **`npm run bundle-all`** (Vite build, TypeScript compile, then copy the webview and backend into the extension tree).
-
 ```bash
 cd extensions
 npx @vscode/vsce package
@@ -64,13 +60,9 @@ This writes `autonomy-*.vsix` in `extensions/`.
 
 ### 3. Install the extension
 
-**VS Code:** **Extensions** → `⋯` → **Install from VSIX…**, or:
-
 ```bash
 code --install-extension ./autonomy-*.vsix
 ```
-
-Run these from `extensions/` after packaging, or pass the full path to the `.vsix`. Uninstall or disable any other install of Autonomy first so you do not load two versions.
 
 ### 4. Open the Autonomy panel
 
