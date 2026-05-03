@@ -4,8 +4,8 @@ React + TypeScript + Vite app used as the **VS Code webview UI**.
 
 Two modes of use:
 
-- **Extension webview**: build to `frontend/dist/` and let the extension serve it.
-- **Standalone dev**: run Vite dev server, typically with the mock harness.
+- **Extension webview**: build to `frontend/dist/` and let the extension serve it (or the extension’s bundled `dist` from `npm run bundle-all`). Python/bootstrap is handled in the extension, not here.
+- **Standalone dev**: run Vite dev server, typically with the mock harness; run the backend yourself for a live API.
 
 ## Commands
 

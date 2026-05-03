@@ -23,6 +23,8 @@ source venv/bin/activate
 uvicorn main:app --host 127.0.0.1 --port 8080 --reload
 ```
 
+The VS Code extension resolves this folder (or a bundled copy under `extensions/backend`) and uses `requirements.txt` for its **managed** Python environment when the user has not set `autonomy.pythonPath`.
+
 ## Configuration
 
 - `.env.example` provides defaults.

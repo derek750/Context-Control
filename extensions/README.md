@@ -20,7 +20,7 @@
 
 ---
 
-## What you can do
+## Features
 
 - **Visualize** each request as sections (system, tools, user, assistant, tool I/O, etc.) with token and cost estimates.
 - **Select and remove** sections you do not want to send; **edit** text in an editor when you need to rewrite instead of delete.
@@ -66,7 +66,6 @@ Search for **Autonomy** in **Settings** (`Ctrl+,` / `Cmd+,`).
 ## More information
 
 - **Repository & local development:** [github.com/derek750/Autonomy](https://github.com/derek750/Autonomy)
-- **Python bootstrap implementation details:** [docs/PYTHON_BOOTSTRAP.md](docs/PYTHON_BOOTSTRAP.md)
 
 ---
 
