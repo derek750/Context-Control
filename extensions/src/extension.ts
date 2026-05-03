@@ -12,7 +12,7 @@ export async function activate(context: vscode.ExtensionContext) {
   output = vscode.window.createOutputChannel("Autonomy");
   context.subscriptions.push(output);
 
-  proxyManager = new ProxyManager(output);
+  proxyManager = new ProxyManager(output, context);
   provider = new WebviewProvider(context, output);
 
   const openCmd = vscode.commands.registerCommand("autonomy.open", async () => {

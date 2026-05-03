@@ -22,8 +22,9 @@ export class WebviewProvider {
     const distDir = this.resolveDistDir();
     if (!distDir) {
       throw new Error(
-        "Autonomy: could not find frontend/dist. Run `npm run build` in frontend/ " +
-          "or set autonomy.webviewDistDir.",
+        "Autonomy: could not load the webview (no dist with index.html). " +
+          "From the Autonomy repo: run `npm run build` in `frontend/`, or set `autonomy.webviewDistDir`. " +
+          "If you installed from the marketplace, update to the latest version (the VSIX must include the bundled UI).",
       );
     }
 
@@ -49,13 +50,25 @@ export class WebviewProvider {
   private resolveDistDir(): string | null {
     const cfg = vscode.workspace.getConfiguration("autonomy");
     const explicit = cfg.get<string>("webviewDistDir");
-    if (explicit && fs.existsSync(path.join(explicit, "index.html"))) return explicit;
+    if (explicit && fs.existsSync(path.join(explicit, "index.html"))) {
+      return explicit;
+    }
 
+    // Monorepo dev: use the workspace’s Vite build when present.
     const workspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (workspace) {
-      const guess = path.join(workspace, "frontend", "dist");
-      if (fs.existsSync(path.join(guess, "index.html"))) return guess;
+      const inRepo = path.join(workspace, "frontend", "dist");
+      if (fs.existsSync(path.join(inRepo, "index.html"))) {
+        return inRepo;
+      }
     }
+
+    // Marketplace / installed VSIX: static assets live next to the extension.
+    const bundled = path.join(this.context.extensionPath, "dist");
+    if (fs.existsSync(path.join(bundled, "index.html"))) {
+      return bundled;
+    }
+
     return null;
   }
 

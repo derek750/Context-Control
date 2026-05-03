@@ -127,16 +127,19 @@ source ~/.zshrc
 
 ## Package the extension
 
-Compile the extension and produce a `.vsix` with [`@vscode/vsce`](https://www.npmjs.com/package/@vscode/vsce):
+The extension’s **`vscode:prepublish`** script is **`npm run bundle-all`**. `vsce package` / `vsce publish` run that automatically. **`bundle-all`** does, in order:
+
+1. **`build:frontend`** — Vite build → `frontend/dist`
+2. **`compile`** — TypeScript → `extensions/out/`
+3. **`bundle-webview`** — `frontend/dist` → `extensions/dist`
+4. **`bundle-backend`** — `backend/` → `extensions/backend`
 
 ```bash
-cd extensions
-npm install
-npm run compile
+cd frontend && npm install
+cd ../extensions && npm install
+npm run bundle-all
 npx @vscode/vsce package
 ```
-
-This writes `autonomy-<version>.vsix` in `extensions/` (the version comes from `extensions/package.json`). To install that build in VS Code: **Extensions** (`Cmd+Shift+X` / `Ctrl+Shift+X`) → **⋯** on the search bar → **Install from VSIX…**, then pick the file.
 
 ## Extension settings
 

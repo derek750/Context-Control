@@ -7,7 +7,10 @@ import * as net from "net";
 export class ProxyManager {
   private proc: ChildProcessWithoutNullStreams | null = null;
 
-  constructor(private readonly output: vscode.OutputChannel) {}
+  constructor(
+    private readonly output: vscode.OutputChannel,
+    private readonly context: vscode.ExtensionContext,
+  ) {}
 
   get running(): boolean {
     return this.proc !== null && !this.proc.killed;
@@ -17,16 +20,7 @@ export class ProxyManager {
     if (this.running) return;
 
     const cfg = vscode.workspace.getConfiguration("autonomy");
-    const workspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (!workspace) {
-      throw new Error("Autonomy needs an open workspace folder.");
-    }
-
-    const backendDir =
-      cfg.get<string>("backendDir") || path.join(workspace, "backend");
-    if (!fs.existsSync(path.join(backendDir, "main.py"))) {
-      throw new Error(`backend/main.py not found in ${backendDir}.`);
-    }
+    const backendDir = this.resolveBackendDir(cfg);
 
     const configured = cfg.get<string>("pythonPath")?.trim() ?? "";
     const python = configured || resolveVenvPython(backendDir);
@@ -60,6 +54,33 @@ export class ProxyManager {
     });
 
     this.output.appendLine(`[proxy] ready on 127.0.0.1:${port}`);
+  }
+
+  private resolveBackendDir(cfg: vscode.WorkspaceConfiguration): string {
+    const configured = cfg.get<string>("backendDir")?.trim() ?? "";
+    if (configured && fs.existsSync(path.join(configured, "main.py"))) {
+      return configured;
+    }
+
+    const workspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    if (workspace) {
+      const inRepo = path.join(workspace, "backend");
+      if (fs.existsSync(path.join(inRepo, "main.py"))) {
+        return inRepo;
+      }
+    }
+
+    const bundled = path.join(this.context.extensionPath, "backend");
+    if (fs.existsSync(path.join(bundled, "main.py"))) {
+      return bundled;
+    }
+
+    throw new Error(
+      "Autonomy: could not find the FastAPI backend (main.py). " +
+        "Open the Autonomy repo as a workspace, set `autonomy.backendDir`, " +
+        "or install an extension build that bundles `backend/`. " +
+        "If using the bundled backend, run `pip install -r requirements.txt` in that folder (see Output).",
+    );
   }
 
   async stop(): Promise<void> {

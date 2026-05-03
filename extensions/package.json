@@ -2,7 +2,7 @@
   "name": "autonomy",
   "displayName": "Autonomy",
   "description": "Power over your prompt",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "license": "MIT",
   "author": "Autonomy",
   "publisher": "derek750",
@@ -46,7 +46,7 @@
         "autonomy.backendDir": {
           "type": "string",
           "default": "",
-          "description": "Absolute path to the backend/ directory. Empty = auto-detect ('<workspace>/backend')."
+          "description": "Absolute path to the FastAPI backend (directory containing main.py). Empty: use <workspace>/backend when present, otherwise the copy bundled in the extension."
         },
         "autonomy.pythonPath": {
           "type": "string",
@@ -56,14 +56,19 @@
         "autonomy.webviewDistDir": {
           "type": "string",
           "default": "",
-          "description": "Absolute path to the built React app (frontend/dist). Empty = auto-detect ('<workspace>/frontend/dist')."
+          "description": "Absolute path to the built React app (Vite output with index.html). Empty: use <workspace>/frontend/dist when present, otherwise the copy bundled inside the extension (extensions/dist in the repo; packaged into the VSIX)."
         }
       }
     }
   },
   "scripts": {
     "compile": "tsc -p .",
-    "watch": "tsc -p . -w"
+    "watch": "tsc -p . -w",
+    "build:frontend": "npm run build --prefix ../frontend",
+    "bundle-webview": "node ./scripts/bundle-webview.mjs",
+    "bundle-backend": "node ./scripts/bundle-backend.mjs",
+    "bundle-all": "npm run build:frontend && npm run compile && npm run bundle-webview && npm run bundle-backend",
+    "vscode:prepublish": "npm run bundle-all"
   },
   "dependencies": {
     "ws": "^8.18.0"
