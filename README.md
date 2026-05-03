@@ -12,6 +12,8 @@
 
 **Autonomy** is a VS Code extension that works with Claude Code. It intercepts every message allowing you to visualize the full context window of a conversation as an interactive bar chart, delete or edit individual message sections, and optionally hold requests for your approval before they reach Anthropic.
 
+In Claude Code, each prompt includes previous messages and replies, forming the context window. As sessions grow, this window can become bloated with redundant or low-value context, increasing token usage and affecting response quality. Autonomy intercepts the context before it is sent, letting developers trim, rewrite, or remove unnecessary context—reducing token waste, preventing bad context from compounding, and improving model performance.
+
 ## How it works
 
 ```
@@ -123,9 +125,18 @@ source ~/.zshrc
 
 ---
 
-## Install from the Visual Studio Marketplace
+## Package the extension
 
-Once the extension is published, install it from the **Extensions** view (`Cmd+Shift+X` / `Ctrl+Shift+X`) using the name shown on the [Marketplace](https://marketplace.visualstudio.com/vscode) listing. Then open `**Autonomy: Open Panel`** and point Claude Code at `http://localhost:8080` as in the steps above.
+Compile the extension and produce a `.vsix` with [`@vscode/vsce`](https://www.npmjs.com/package/@vscode/vsce):
+
+```bash
+cd extensions
+npm install
+npm run compile
+npx @vscode/vsce package
+```
+
+This writes `autonomy-<version>.vsix` in `extensions/` (the version comes from `extensions/package.json`). To install that build in VS Code: **Extensions** (`Cmd+Shift+X` / `Ctrl+Shift+X`) → **⋯** on the search bar → **Install from VSIX…**, then pick the file.
 
 ## Extension settings
 
