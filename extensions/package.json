@@ -3,6 +3,8 @@
   "displayName": "Autonomy",
   "description": "Power over your prompt",
   "version": "1.0.0",
+  "license": "MIT",
+  "author": "Autonomy",
   "publisher": "autonomy",
   "icon": "assets/Logo.png",
   "repository": {

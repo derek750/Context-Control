@@ -2,6 +2,13 @@
   "name": "frontend",
   "private": true,
   "version": "0.0.0",
+  "license": "MIT",
+  "author": "Autonomy",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/derek750/Autonomy.git",
+    "directory": "frontend"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
