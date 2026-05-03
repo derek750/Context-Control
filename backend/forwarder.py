@@ -380,7 +380,7 @@ async def passthrough(request: Request, full_path: str) -> Response:
     # token-counting, and anything else Claude Code (or another client) calls
     # outside /v1/messages. We don't gate these — schemas vary too much — but
     # we surface them in the proxy log so the user has a record. WARNING level
-    # so they stand out in the ContextLens output channel.
+    # so they stand out in the Autonomy output channel.
     logger.warning(
         "forwarder: passthrough %s /%s — forwarded transparently, not gated",
         request.method,
