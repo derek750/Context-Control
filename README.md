@@ -4,9 +4,13 @@
 
 <h1 align="center">Autonomy</h1>
 
-**Autonomy** is a VS Code extension that works with Claude Code. It intercepts every message allowing you to visualize the full context window as an interactive bar chart, delete or edit individual message sections, and optionally hold requests for your approval before they reach Anthropic.
+<p align="center">
+  <strong>Power over your prompt</strong>
+</p>
 
 ---
+
+**Autonomy** is a VS Code extension that works with Claude Code. It intercepts every message allowing you to visualize the full context window of a conversation as an interactive bar chart, delete or edit individual message sections, and optionally hold requests for your approval before they reach Anthropic.
 
 ## How it works
 
@@ -32,7 +36,7 @@ The proxy sits between Claude Code and Anthropic. Every request is classified in
 
 ---
 
-## Run Locally
+## Run locally
 
 ### 1. Clone the repo
 
