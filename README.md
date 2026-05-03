@@ -40,106 +40,61 @@ The proxy sits between Claude Code and Anthropic. Every request is classified in
 
 ## Run locally
 
-### 1. Clone the repo
+Build and install from a **VSIX** so you run the same bundled webview and backend as a Marketplace release.
+
+### 1. Clone the repo and install Node dependencies
 
 ```bash
 git clone <repo-url>
 cd <repo-directory>
+cd frontend && npm install
+cd ../extensions && npm install
 ```
 
-### 2. Install backend dependencies
+### 2. Build and package
+
+From `extensions/`, `npx @vscode/vsce package` runs **`vscode:prepublish`**, which executes **`npm run bundle-all`** (Vite build, TypeScript compile, then copy the webview and backend into the extension tree).
 
 ```bash
-cd backend
-python3 -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+cd extensions
+npx @vscode/vsce package
 ```
 
-Copy the example env file (defaults work out of the box):
+This writes `autonomy-*.vsix` in `extensions/`.
+
+### 3. Install the extension
+
+**VS Code:** **Extensions** → `⋯` → **Install from VSIX…**, or:
 
 ```bash
-cp .env.example .env
+code --install-extension ./autonomy-*.vsix
 ```
 
-```
-ANTHROPIC_UPSTREAM_URL=https://api.anthropic.com
-PROXY_PORT=8080
-```
+Run these from `extensions/` after packaging, or pass the full path to the `.vsix`. Uninstall or disable any other install of Autonomy first so you do not load two versions.
 
-### 3. Install frontend
+### 4. Open the Autonomy panel
+
+Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) → **Autonomy: Open Panel**. The proxy listens on port **8080** by default. On first open the extension discovers Python, creates a managed environment, and installs packages from PyPI (see **View → Output → Autonomy**).
+
+### 5. Point Claude Code at the proxy
+
+In every terminal where you run Claude Code:
 
 ```bash
-cd ../frontend
-npm install
-npm run build
-```
-
-This produces `frontend/dist/` which the extension serves as a webview.
-
-### 4. Install extension deps + build
-
-```bash
-cd ../extensions
-npm install
-npm run compile
-```
-
-### 5. Run the extension
-
-Open the extension for development, then start it with the debugger:
-
-1. Open the `extensions/` folder in VS Code:
-  ```bash
-   code extensions/
-  ```
-2. Press **F5** (or go to **Run → Start Debugging**).
-  This launches an **Extension Development Host** — a second VS Code window with Autonomy loaded.
-
-### 6. Open the Autonomy panel
-
-In the VS Code window that has Autonomy running:
-
-- Open the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`)
-- Run `**Autonomy: Open Panel`**
-
-The panel opens beside your editor and (by default) the proxy starts automatically on port 8080.
-
-> If the extension can’t auto-detect your workspace layout, set absolute paths in VS Code settings — see [Extension settings](#extension-settings) below.
-
-### 7. Point Claude Code at the proxy
-
-In every terminal where you run Claude Code, set:
-
-```bash
-export ANTHROPIC_BASE_URL=http://localhost:8080
+export ANTHROPIC_BASE_URL=http://127.0.0.1:8080
 claude
 ```
 
-Or add it to your shell profile (`~/.zshrc` / `~/.bashrc`) so it's always active:
+Optional — persist in your shell profile:
 
 ```bash
-echo 'export ANTHROPIC_BASE_URL=http://localhost:8080' >> ~/.zshrc
+echo 'export ANTHROPIC_BASE_URL=http://127.0.0.1:8080' >> ~/.zshrc
 source ~/.zshrc
 ```
 
+Ports and advanced overrides are under [Extension settings](#extension-settings).
+
 ---
-
-## Package the extension
-
-The extension’s **`vscode:prepublish`** script is **`npm run bundle-all`**. `vsce package` / `vsce publish` run that automatically. **`bundle-all`** does, in order:
-
-1. **`build:frontend`** — Vite build → `frontend/dist`
-2. **`compile`** — TypeScript → `extensions/out/`
-3. **`bundle-webview`** — `frontend/dist` → `extensions/dist`
-4. **`bundle-backend`** — `backend/` → `extensions/backend`
-
-```bash
-cd frontend && npm install
-cd ../extensions && npm install
-npm run bundle-all
-npx @vscode/vsce package
-```
 
 ## Extension settings
 
