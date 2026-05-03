@@ -3,6 +3,7 @@ import { spawn, ChildProcessWithoutNullStreams } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as net from "net";
+import { resolveBackendDir } from "./backend-path";
 
 export class ProxyManager {
   private proc: ChildProcessWithoutNullStreams | null = null;
@@ -16,14 +17,22 @@ export class ProxyManager {
     return this.proc !== null && !this.proc.killed;
   }
 
-  async start(port: number): Promise<void> {
+  /**
+   * @param port   - proxy port
+   * @param python - resolved Python executable from PythonBootstrap. When
+   *                 omitted the legacy venv/PATH fallback is used so local dev
+   *                 works without running the full bootstrap.
+   */
+  async start(port: number, python?: string): Promise<void> {
     if (this.running) return;
 
     const cfg = vscode.workspace.getConfiguration("autonomy");
-    const backendDir = this.resolveBackendDir(cfg);
+    const backendDir = resolveBackendDir(cfg, this.context.extensionPath);
 
-    const configured = cfg.get<string>("pythonPath")?.trim() ?? "";
-    const python = configured || resolveVenvPython(backendDir);
+    if (!python) {
+      const configured = cfg.get<string>("pythonPath")?.trim() ?? "";
+      python = configured || resolveVenvPython(backendDir);
+    }
 
     this.output.appendLine(
       `[proxy] starting: ${python} -m uvicorn main:app --port ${port} (cwd=${backendDir})`,
@@ -54,33 +63,6 @@ export class ProxyManager {
     });
 
     this.output.appendLine(`[proxy] ready on 127.0.0.1:${port}`);
-  }
-
-  private resolveBackendDir(cfg: vscode.WorkspaceConfiguration): string {
-    const configured = cfg.get<string>("backendDir")?.trim() ?? "";
-    if (configured && fs.existsSync(path.join(configured, "main.py"))) {
-      return configured;
-    }
-
-    const workspace = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    if (workspace) {
-      const inRepo = path.join(workspace, "backend");
-      if (fs.existsSync(path.join(inRepo, "main.py"))) {
-        return inRepo;
-      }
-    }
-
-    const bundled = path.join(this.context.extensionPath, "backend");
-    if (fs.existsSync(path.join(bundled, "main.py"))) {
-      return bundled;
-    }
-
-    throw new Error(
-      "Autonomy: could not find the FastAPI backend (main.py). " +
-        "Open the Autonomy repo as a workspace, set `autonomy.backendDir`, " +
-        "or install an extension build that bundles `backend/`. " +
-        "If using the bundled backend, run `pip install -r requirements.txt` in that folder (see Output).",
-    );
   }
 
   async stop(): Promise<void> {

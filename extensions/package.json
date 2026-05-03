@@ -28,6 +28,10 @@
       {
         "command": "autonomy.restartProxy",
         "title": "Autonomy: Restart Backend Proxy"
+      },
+      {
+        "command": "autonomy.retryPythonSetup",
+        "title": "Autonomy: Retry Python Setup"
       }
     ],
     "configuration": {

@@ -2,6 +2,8 @@ import * as vscode from "vscode";
 import { ProxyManager } from "./proxy-manager";
 import { WebviewProvider } from "./webview-provider";
 import { WebSocketBridge } from "./websocket-client";
+import { ensureReady } from "./python-bootstrap";
+import { resolveBackendDir } from "./backend-path";
 
 let proxyManager: ProxyManager | null = null;
 let bridge: WebSocketBridge | null = null;
@@ -16,17 +18,16 @@ export async function activate(context: vscode.ExtensionContext) {
   provider = new WebviewProvider(context, output);
 
   const openCmd = vscode.commands.registerCommand("autonomy.open", async () => {
-    const port = vscode.workspace
-      .getConfiguration("autonomy")
-      .get<number>("proxyPort", 8080);
-
-    const autoStart = vscode.workspace
-      .getConfiguration("autonomy")
-      .get<boolean>("autoStartProxy", true);
+    const cfg = vscode.workspace.getConfiguration("autonomy");
+    const port = cfg.get<number>("proxyPort", 8080);
+    const autoStart = cfg.get<boolean>("autoStartProxy", true);
 
     if (autoStart && proxyManager && !proxyManager.running) {
+      const python = await runBootstrap(context);
+      if (python === null) return; // bootstrap failed; error already shown
+
       try {
-        await proxyManager.start(port);
+        await proxyManager.start(port, python);
       } catch (err) {
         vscode.window.showErrorMessage(
           `Autonomy: failed to start proxy — ${(err as Error).message}. ` +
@@ -42,9 +43,6 @@ export async function activate(context: vscode.ExtensionContext) {
       context.subscriptions.push(bridge);
     }
     bridge.attachWebview(panel.webview);
-    // Detach from the bridge when the panel is closed — without this, the
-    // bridge keeps trying to postMessage into a disposed webview, which
-    // silently swallows everything until the next reopen.
     panel.onDidDispose(() => {
       bridge?.detachWebview();
     });
@@ -58,15 +56,82 @@ export async function activate(context: vscode.ExtensionContext) {
         .getConfiguration("autonomy")
         .get<number>("proxyPort", 8080);
       await proxyManager.stop();
-      await proxyManager.start(port);
+      const python = await runBootstrap(context);
+      if (python === null) return;
+      await proxyManager.start(port, python);
       vscode.window.showInformationMessage("Autonomy: proxy restarted.");
     },
   );
 
-  context.subscriptions.push(openCmd, restartCmd);
+  const retrySetupCmd = vscode.commands.registerCommand(
+    "autonomy.retryPythonSetup",
+    async () => {
+      output.show(true);
+      output.appendLine("[bootstrap] Retrying Python setup (cache cleared)…");
+      const cfg = vscode.workspace.getConfiguration("autonomy");
+      let backendDir: string;
+      try {
+        backendDir = resolveBackendDir(cfg, context.extensionPath);
+      } catch (err) {
+        vscode.window.showErrorMessage(`Autonomy: ${(err as Error).message}`);
+        return;
+      }
+      const result = await ensureReady(context, output, backendDir, true);
+      if (result.ok) {
+        vscode.window.showInformationMessage(
+          `Autonomy: Python environment ready (${result.pythonExec}).`,
+        );
+      } else {
+        vscode.window.showErrorMessage(
+          `Autonomy: Python setup failed — ${result.reason}. ${result.detail ?? ""}`.trim(),
+        );
+      }
+    },
+  );
+
+  context.subscriptions.push(openCmd, restartCmd, retrySetupCmd);
 }
 
 export async function deactivate() {
   await bridge?.dispose();
   await proxyManager?.stop();
+}
+
+/**
+ * Run PythonBootstrap and surface a friendly error if it fails.
+ * Returns the resolved Python executable, or `null` on failure.
+ */
+async function runBootstrap(
+  context: vscode.ExtensionContext,
+): Promise<string | null> {
+  const cfg = vscode.workspace.getConfiguration("autonomy");
+  let backendDir: string;
+  try {
+    backendDir = resolveBackendDir(cfg, context.extensionPath);
+  } catch (err) {
+    vscode.window.showErrorMessage(`Autonomy: ${(err as Error).message}`);
+    return null;
+  }
+
+  output.show(false); // reveal without stealing focus
+  const result = await ensureReady(context, output, backendDir);
+  if (result.ok) return result.pythonExec;
+
+  const retryAction = "Retry setup";
+  const settingsAction = "Open Settings";
+  const choice = await vscode.window.showErrorMessage(
+    `Autonomy: Python setup failed — ${result.reason}. ${result.detail ?? ""}`.trim(),
+    retryAction,
+    settingsAction,
+  );
+  if (choice === retryAction) {
+    const retry = await ensureReady(context, output, backendDir, true);
+    if (retry.ok) return retry.pythonExec;
+    vscode.window.showErrorMessage(
+      `Autonomy: retry failed. See Output → Autonomy for details.`,
+    );
+  } else if (choice === settingsAction) {
+    vscode.commands.executeCommand("workbench.action.openSettings", "autonomy.pythonPath");
+  }
+  return null;
 }
