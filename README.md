@@ -8,6 +8,10 @@
   <strong>Power over your prompt</strong>
 </p>
 
+[![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/derek750.context-control?color=0078d4&label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=derek750.context-control)
+[![Installs](https://img.shields.io/visual-studio-marketplace/i/derek750.context-control?color=blue)](https://marketplace.visualstudio.com/items?itemName=derek750.context-control)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 ---
 
 **Context Control** is a VS Code extension that works with Claude Code. It intercepts every message allowing you to visualize the full context window of a conversation as an interactive bar chart, delete or edit individual message sections, and optionally hold requests for your approval before they reach Anthropic.
@@ -23,6 +27,18 @@ Claude Code  →  localhost:8080 (FastAPI proxy)  →  api.anthropic.com
 ```
 
 The proxy sits between Claude Code and Anthropic. Every request is classified into typed sections (system prompt, tool definitions, conversation turns, tool calls/outputs, images, thinking blocks), token-counted, and streamed to the VS Code webview over WebSocket. You can delete or edit sections before they are forwarded.
+
+---
+
+## Install
+
+**[Get Context Control from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=derek750.context-control)**
+
+Or install from the command line:
+
+```bash
+code --install-extension derek750.context-control
+```
 
 ---
 
