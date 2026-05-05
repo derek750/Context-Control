@@ -12,7 +12,7 @@ declare global {
   }
 }
 
-const STUB_STATE_KEY = "autonomy.vscodeStub.state";
+const STUB_STATE_KEY = "contextControl.vscodeStub.state";
 
 function createStubApi(): VsCodeApi {
   return {

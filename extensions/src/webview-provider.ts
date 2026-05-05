@@ -27,15 +27,15 @@ export class WebviewProvider {
     const distDir = this.resolveDistDir();
     if (!distDir) {
       throw new Error(
-        "Autonomy: could not load the webview (no dist with index.html). " +
-          "From the Autonomy repo: run `npm run build` in `frontend/`, or set `autonomy.webviewDistDir`. " +
+        "Context Control: could not load the webview (no dist with index.html). " +
+          "From this repository: run `npm run build` in `frontend/`, or set `contextControl.webviewDistDir`. " +
           "If you installed from the marketplace, update to the latest version (the VSIX must include the bundled UI).",
       );
     }
 
     this.panel = vscode.window.createWebviewPanel(
-      "autonomy",
-      "Autonomy",
+      "contextControl",
+      "Context Control",
       vscode.ViewColumn.Beside,
       {
         enableScripts: true,
@@ -53,7 +53,7 @@ export class WebviewProvider {
   }
 
   private resolveDistDir(): string | null {
-    const cfg = vscode.workspace.getConfiguration("autonomy");
+    const cfg = vscode.workspace.getConfiguration("contextControl");
     const explicit = cfg.get<string>("webviewDistDir");
     if (explicit && fs.existsSync(path.join(explicit, "index.html"))) {
       return explicit;

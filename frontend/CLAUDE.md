@@ -1,4 +1,4 @@
-# Autonomy frontend (`frontend/`)
+# Context Control frontend (`frontend/`)
 
 React + TypeScript + Vite app used as the **VS Code webview UI**.
 

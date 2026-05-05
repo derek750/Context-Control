@@ -6,7 +6,7 @@ import * as path from "path";
  * Resolve the backend directory (the folder containing `main.py`).
  *
  * Priority:
- *  1. `autonomy.backendDir` setting — if it exists and contains `main.py`.
+ *  1. `contextControl.backendDir` setting — if it exists and contains `main.py`.
  *  2. `<workspace>/backend` — if present and contains `main.py`.
  *  3. `<extensionPath>/backend` — the copy bundled into the VSIX.
  *
@@ -35,8 +35,8 @@ export function resolveBackendDir(
   }
 
   throw new Error(
-    "Autonomy: could not find the FastAPI backend (main.py). " +
-      "Open the Autonomy repo as a workspace, set `autonomy.backendDir`, " +
+    "Context Control: could not find the FastAPI backend (main.py). " +
+      "Open this repository as a workspace, set `contextControl.backendDir`, " +
       "or install an extension build that bundles `backend/`. " +
       "If using the bundled backend, run `pip install -r requirements.txt` in that folder (see Output).",
   );

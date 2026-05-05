@@ -1,15 +1,15 @@
 {
-  "name": "autonomy",
-  "displayName": "Autonomy",
+  "name": "context-control",
+  "displayName": "Context Control",
   "description": "Power over your prompt",
-  "version": "1.0.1",
+  "version": "1.0.0",
   "license": "MIT",
-  "author": "Autonomy",
+  "author": "Context Control",
   "publisher": "derek750",
   "icon": "assets/Logo.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/derek750/Autonomy.git",
+    "url": "https://github.com/derek750/Context-Control.git",
     "directory": "extensions"
   },
   "private": true,
@@ -22,42 +22,42 @@
   "contributes": {
     "commands": [
       {
-        "command": "autonomy.open",
-        "title": "Autonomy: Open Panel"
+        "command": "contextControl.open",
+        "title": "Context Control: Open Panel"
       },
       {
-        "command": "autonomy.restartProxy",
-        "title": "Autonomy: Restart Backend Proxy"
+        "command": "contextControl.restartProxy",
+        "title": "Context Control: Restart Backend Proxy"
       },
       {
-        "command": "autonomy.retryPythonSetup",
-        "title": "Autonomy: Retry Python Setup"
+        "command": "contextControl.retryPythonSetup",
+        "title": "Context Control: Retry Python Setup"
       }
     ],
     "configuration": {
-      "title": "Autonomy",
+      "title": "Context Control",
       "properties": {
-        "autonomy.proxyPort": {
+        "contextControl.proxyPort": {
           "type": "number",
           "default": 8080,
           "description": "Port the FastAPI proxy listens on."
         },
-        "autonomy.autoStartProxy": {
+        "contextControl.autoStartProxy": {
           "type": "boolean",
           "default": true,
           "description": "Spawn the FastAPI proxy automatically when the panel opens. Disable if you run the backend yourself."
         },
-        "autonomy.backendDir": {
+        "contextControl.backendDir": {
           "type": "string",
           "default": "",
           "description": "Absolute path to the FastAPI backend (directory containing main.py). Empty: use <workspace>/backend when present, otherwise the copy bundled in the extension."
         },
-        "autonomy.pythonPath": {
+        "contextControl.pythonPath": {
           "type": "string",
           "default": "",
           "description": "Path to the Python interpreter used to run uvicorn. Empty = auto-detect 'backend/venv/bin/python', falling back to 'python3'."
         },
-        "autonomy.webviewDistDir": {
+        "contextControl.webviewDistDir": {
           "type": "string",
           "default": "",
           "description": "Absolute path to the built React app (Vite output with index.html). Empty: use <workspace>/frontend/dist when present, otherwise the copy bundled inside the extension (extensions/dist in the repo; packaged into the VSIX)."

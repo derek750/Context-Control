@@ -135,7 +135,7 @@ function defineTheme(monaco: Monaco) {
   monaco.languages.css.cssDefaults.setOptions({ validate: false });
   monaco.languages.css.scssDefaults.setOptions({ validate: false });
   monaco.languages.html.htmlDefaults.setOptions({ validate: false });
-  monaco.editor.defineTheme("autonomy", {
+  monaco.editor.defineTheme("contextControl", {
     base: "vs-dark",
     inherit: true,
     rules: [],
@@ -170,7 +170,7 @@ export function EditorPanel({
   const handleMount: OnMount = useCallback((editor, monaco) => {
     editorRef.current = editor;
     defineTheme(monaco);
-    monaco.editor.setTheme("autonomy");
+    monaco.editor.setTheme("contextControl");
   }, []);
 
   const onEditorChange = useCallback(
@@ -225,7 +225,7 @@ export function EditorPanel({
               value={content}
               onMount={handleMount}
               onChange={onEditorChange}
-              theme="autonomy"
+              theme="contextControl"
               options={{
                 minimap: { enabled: false },
                 wordWrap: "on",

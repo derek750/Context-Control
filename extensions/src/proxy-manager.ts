@@ -26,7 +26,7 @@ export class ProxyManager {
   async start(port: number, python?: string): Promise<void> {
     if (this.running) return;
 
-    const cfg = vscode.workspace.getConfiguration("autonomy");
+    const cfg = vscode.workspace.getConfiguration("contextControl");
     const backendDir = resolveBackendDir(cfg, this.context.extensionPath);
 
     if (!python) {
@@ -58,7 +58,7 @@ export class ProxyManager {
       this.stop();
       throw new Error(
         `Proxy did not become ready on port ${port}: ${(err as Error).message}. ` +
-          `Check the Autonomy output channel for uvicorn logs.`,
+          `Check the Context Control output channel for uvicorn logs.`,
       );
     });
 

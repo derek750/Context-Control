@@ -11,14 +11,14 @@ let provider: WebviewProvider | null = null;
 let output: vscode.OutputChannel;
 
 export async function activate(context: vscode.ExtensionContext) {
-  output = vscode.window.createOutputChannel("Autonomy");
+  output = vscode.window.createOutputChannel("Context Control");
   context.subscriptions.push(output);
 
   proxyManager = new ProxyManager(output, context);
   provider = new WebviewProvider(context);
 
-  const openCmd = vscode.commands.registerCommand("autonomy.open", async () => {
-    const cfg = vscode.workspace.getConfiguration("autonomy");
+  const openCmd = vscode.commands.registerCommand("contextControl.open", async () => {
+    const cfg = vscode.workspace.getConfiguration("contextControl");
     const port = cfg.get<number>("proxyPort", 8080);
     const autoStart = cfg.get<boolean>("autoStartProxy", true);
 
@@ -30,7 +30,7 @@ export async function activate(context: vscode.ExtensionContext) {
         await proxyManager.start(port, python);
       } catch (err) {
         vscode.window.showErrorMessage(
-          `Autonomy: failed to start proxy — ${(err as Error).message}. ` +
+          `Context Control: failed to start proxy — ${(err as Error).message}. ` +
             `You can disable auto-start in Settings and run uvicorn yourself.`,
         );
       }
@@ -44,47 +44,47 @@ export async function activate(context: vscode.ExtensionContext) {
     }
     bridge.attachWebview(panel.webview);
     panel.onDidDispose(() => {
-      output.appendLine("[autonomy] panel closed");
+      output.appendLine("[context-control] panel closed");
       bridge?.detachWebview();
     });
   });
 
   const restartCmd = vscode.commands.registerCommand(
-    "autonomy.restartProxy",
+    "contextControl.restartProxy",
     async () => {
       if (!proxyManager) return;
       const port = vscode.workspace
-        .getConfiguration("autonomy")
+        .getConfiguration("contextControl")
         .get<number>("proxyPort", 8080);
       await proxyManager.stop();
       const python = await runBootstrap(context);
       if (python === null) return;
       await proxyManager.start(port, python);
-      vscode.window.showInformationMessage("Autonomy: proxy restarted.");
+      vscode.window.showInformationMessage("Context Control: proxy restarted.");
     },
   );
 
   const retrySetupCmd = vscode.commands.registerCommand(
-    "autonomy.retryPythonSetup",
+    "contextControl.retryPythonSetup",
     async () => {
       output.show(true);
       output.appendLine("[bootstrap] Retrying Python setup (cache cleared)…");
-      const cfg = vscode.workspace.getConfiguration("autonomy");
+      const cfg = vscode.workspace.getConfiguration("contextControl");
       let backendDir: string;
       try {
         backendDir = resolveBackendDir(cfg, context.extensionPath);
       } catch (err) {
-        vscode.window.showErrorMessage(`Autonomy: ${(err as Error).message}`);
+        vscode.window.showErrorMessage(`Context Control: ${(err as Error).message}`);
         return;
       }
       const result = await ensureReady(context, output, backendDir, true);
       if (result.ok) {
         vscode.window.showInformationMessage(
-          `Autonomy: Python environment ready (${result.pythonExec}).`,
+          `Context Control: Python environment ready (${result.pythonExec}).`,
         );
       } else {
         vscode.window.showErrorMessage(
-          `Autonomy: Python setup failed — ${result.reason}. ${result.detail ?? ""}`.trim(),
+          `Context Control: Python setup failed — ${result.reason}. ${result.detail ?? ""}`.trim(),
         );
       }
     },
@@ -96,7 +96,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // this last so it runs first: stop WS reconnect, close webview, SIGTERM uvicorn.
   context.subscriptions.push(
     new vscode.Disposable(() => {
-      output?.appendLine("[autonomy] shutting down (subscription dispose)");
+      output?.appendLine("[context-control] shutting down (subscription dispose)");
       bridge?.dispose();
       provider?.dispose();
       proxyManager?.disposeSync();
@@ -106,7 +106,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 /** Full async teardown when the extension host calls `deactivate`. */
 async function shutdownExtensionHostResources(reason: string): Promise<void> {
-  output?.appendLine(`[autonomy] shutting down (${reason})`);
+  output?.appendLine(`[context-control] shutting down (${reason})`);
   bridge?.dispose();
   provider?.dispose();
   await proxyManager?.stop();
@@ -126,12 +126,12 @@ export async function deactivate() {
 async function runBootstrap(
   context: vscode.ExtensionContext,
 ): Promise<string | null> {
-  const cfg = vscode.workspace.getConfiguration("autonomy");
+  const cfg = vscode.workspace.getConfiguration("contextControl");
   let backendDir: string;
   try {
     backendDir = resolveBackendDir(cfg, context.extensionPath);
   } catch (err) {
-    vscode.window.showErrorMessage(`Autonomy: ${(err as Error).message}`);
+    vscode.window.showErrorMessage(`Context Control: ${(err as Error).message}`);
     return null;
   }
 
@@ -142,7 +142,7 @@ async function runBootstrap(
   const retryAction = "Retry setup";
   const settingsAction = "Open Settings";
   const choice = await vscode.window.showErrorMessage(
-    `Autonomy: Python setup failed — ${result.reason}. ${result.detail ?? ""}`.trim(),
+    `Context Control: Python setup failed — ${result.reason}. ${result.detail ?? ""}`.trim(),
     retryAction,
     settingsAction,
   );
@@ -150,10 +150,10 @@ async function runBootstrap(
     const retry = await ensureReady(context, output, backendDir, true);
     if (retry.ok) return retry.pythonExec;
     vscode.window.showErrorMessage(
-      `Autonomy: retry failed. See Output → Autonomy for details.`,
+      `Context Control: retry failed. See Output → Context Control for details.`,
     );
   } else if (choice === settingsAction) {
-    vscode.commands.executeCommand("workbench.action.openSettings", "autonomy.pythonPath");
+    vscode.commands.executeCommand("workbench.action.openSettings", "contextControl.pythonPath");
   }
   return null;
 }

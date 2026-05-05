@@ -17,7 +17,7 @@ try {
   await fs.access(path.join(src, "main.py"));
 } catch {
   console.error(
-    "bundle-backend: ../backend/main.py not found. Clone the Autonomy repo with the backend/ folder.",
+    "bundle-backend: ../backend/main.py not found. Clone this repository with the backend/ folder.",
   );
   process.exit(1);
 }

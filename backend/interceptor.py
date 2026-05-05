@@ -203,7 +203,7 @@ async def handle(request: Request) -> Response:
         logger.warning(
             "interceptor: gating wanted to hold request_id=%s but no UI "
             "client is connected; passing through unheld. Open the "
-            "Autonomy panel to gate the next request.",
+            "Context Control panel to gate the next request.",
             request_id,
         )
 

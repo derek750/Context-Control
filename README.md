@@ -2,7 +2,7 @@
   <img width=120px, src="./assets/Logo.png"/>
 </p>
 
-<h1 align="center">Autonomy</h1>
+<h1 align="center">Context Control</h1>
 
 <p align="center">
   <strong>Power over your prompt</strong>
@@ -10,16 +10,16 @@
 
 ---
 
-**Autonomy** is a VS Code extension that works with Claude Code. It intercepts every message allowing you to visualize the full context window of a conversation as an interactive bar chart, delete or edit individual message sections, and optionally hold requests for your approval before they reach Anthropic.
+**Context Control** is a VS Code extension that works with Claude Code. It intercepts every message allowing you to visualize the full context window of a conversation as an interactive bar chart, delete or edit individual message sections, and optionally hold requests for your approval before they reach Anthropic.
 
-In Claude Code, each prompt includes previous messages and replies, forming the context window. As sessions grow, this window can become bloated with redundant or low-value context, increasing token usage and affecting response quality. Autonomy intercepts the context before it is sent, letting developers trim, rewrite, or remove unnecessary context—reducing token waste, preventing bad context from compounding, and improving model performance.
+In Claude Code, each prompt includes previous messages and replies, forming the context window. As sessions grow, this window can become bloated with redundant or low-value context, increasing token usage and affecting response quality. Context Control intercepts the context before it is sent, letting developers trim, rewrite, or remove unnecessary context—reducing token waste, preventing bad context from compounding, and improving model performance.
 
 ## How it works
 
 ```
 Claude Code  →  localhost:8080 (FastAPI proxy)  →  api.anthropic.com
                         ↕ WebSocket
-               VS Code Extension (Autonomy panel)
+               VS Code Extension (Context Control panel)
 ```
 
 The proxy sits between Claude Code and Anthropic. Every request is classified into typed sections (system prompt, tool definitions, conversation turns, tool calls/outputs, images, thinking blocks), token-counted, and streamed to the VS Code webview over WebSocket. You can delete or edit sections before they are forwarded.
@@ -56,17 +56,17 @@ cd extensions
 npx @vscode/vsce package
 ```
 
-This writes `autonomy-*.vsix` in `extensions/`.
+This writes `context-control-*.vsix` in `extensions/`.
 
 ### 3. Install the extension
 
 ```bash
-code --install-extension ./autonomy-*.vsix
+code --install-extension ./context-control-*.vsix
 ```
 
-### 4. Open the Autonomy panel
+### 4. Open the Context Control panel
 
-Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) → **Autonomy: Open Panel**. The proxy listens on port **8080** by default. On first open the extension discovers Python, creates a managed environment, and installs packages from PyPI (see **View → Output → Autonomy**).
+Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) → **Context Control: Open Panel**. The proxy listens on port **8080** by default. On first open the extension discovers Python, creates a managed environment, and installs packages from PyPI (see **View → Output → Context Control**).
 
 ### 5. Point Claude Code at the proxy
 
@@ -90,16 +90,16 @@ Ports and advanced overrides are under [Extension settings](#extension-settings)
 
 ## Extension settings
 
-All settings live under `**autonomy.***` in VS Code settings (`Cmd+,`):
+All settings live under `**contextControl.***` in VS Code settings (`Cmd+,`):
 
 
-| Setting                   | Default  | Description                                                     |
-| ------------------------- | -------- | --------------------------------------------------------------- |
-| `autonomy.proxyPort`      | `8080`   | Port the FastAPI proxy listens on                               |
-| `autonomy.autoStartProxy` | `true`   | Auto-start the proxy when the panel opens                       |
-| `autonomy.backendDir`     | *(auto)* | Absolute path to `backend/` — leave blank to auto-detect        |
-| `autonomy.pythonPath`     | *(auto)* | Python interpreter path — defaults to `backend/venv/bin/python` |
-| `autonomy.webviewDistDir` | *(auto)* | Path to built React app — defaults to `frontend/dist`           |
+| Setting                        | Default  | Description                                                     |
+| ------------------------------ | -------- | --------------------------------------------------------------- |
+| `contextControl.proxyPort`      | `8080`   | Port the FastAPI proxy listens on                               |
+| `contextControl.autoStartProxy` | `true`   | Auto-start the proxy when the panel opens                       |
+| `contextControl.backendDir`     | *(auto)* | Absolute path to `backend/` — leave blank to auto-detect        |
+| `contextControl.pythonPath`     | *(auto)* | Python interpreter path — defaults to `backend/venv/bin/python` |
+| `contextControl.webviewDistDir` | *(auto)* | Path to built React app — defaults to `frontend/dist`           |
 
 
 ---
@@ -107,7 +107,7 @@ All settings live under `**autonomy.***` in VS Code settings (`Cmd+,`):
 ## Project structure
 
 ```
-Autonomy/
+Context Control/
 ├── backend/          FastAPI proxy — intercepts, classifies, gates requests
 │   ├── main.py       App entry point + WebSocket endpoint
 │   ├── interceptor.py  POST /v1/messages handler

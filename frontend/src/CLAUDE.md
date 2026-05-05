@@ -1,4 +1,4 @@
-# Autonomy webview UI (`frontend/src/`)
+# Context Control webview UI (`frontend/src/`)
 
 This folder is the webview client code rendered inside VS Code. The extension’s Python venv and proxy are outside this tree; this UI only talks to the backend over the extension’s WebSocket bridge.
 

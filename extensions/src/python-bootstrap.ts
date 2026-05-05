@@ -7,13 +7,13 @@ import { promisify } from "util";
 
 const execFileAsync = promisify(execFile);
 
-// Minimum Python version required to run the Autonomy backend.
+// Minimum Python version required to run the Context Control backend.
 const MIN_VERSION: [number, number] = [3, 10];
 
 // globalState keys
-const KEY_VENV_ROOT = "autonomy.venvRoot";
-const KEY_BASE_PYTHON = "autonomy.basePython";
-const KEY_REQ_HASH = "autonomy.requirementsHash";
+const KEY_VENV_ROOT = "contextControl.venvRoot";
+const KEY_BASE_PYTHON = "contextControl.basePython";
+const KEY_REQ_HASH = "contextControl.requirementsHash";
 
 export type EnsureError =
   | "PYTHON_NOT_FOUND"
@@ -29,7 +29,7 @@ export type EnsureResult =
 /**
  * Ensure a Python environment with the backend dependencies installed is ready.
  *
- * When `autonomy.pythonPath` is set the user owns their interpreter — we only
+ * When `contextControl.pythonPath` is set the user owns their interpreter — we only
  * validate existence + version and return that path directly (no managed venv).
  *
  * When it is empty we run full discovery → version gate → managed venv
@@ -46,7 +46,7 @@ export async function ensureReady(
   backendDir: string,
   force = false,
 ): Promise<EnsureResult> {
-  const cfg = vscode.workspace.getConfiguration("autonomy");
+  const cfg = vscode.workspace.getConfiguration("contextControl");
   const manualPath = cfg.get<string>("pythonPath")?.trim() ?? "";
 
   // ── Explicit override path ────────────────────────────────────────────────
@@ -93,7 +93,7 @@ export async function ensureReady(
   // is safe (each unique base gets its own subdirectory).
   const venvRoot = path.join(
     context.globalStorageUri.fsPath,
-    "autonomy-venv",
+    "context-control-venv",
     shortHash(base),
   );
   fs.mkdirSync(venvRoot, { recursive: true });
@@ -136,7 +136,7 @@ async function handleManualPath(
     return {
       ok: false,
       reason: "PYTHON_NOT_FOUND",
-      detail: `autonomy.pythonPath is set to "${manualPath}" but that file does not exist.`,
+      detail: `contextControl.pythonPath is set to "${manualPath}" but that file does not exist.`,
     };
   }
   const versionOk = await meetsMinimum(manualPath, MIN_VERSION, output);
@@ -327,8 +327,8 @@ async function createVenv(
   } catch (e) {
     const hint =
       process.platform === "darwin"
-        ? " Try setting Autonomy › Python: Path to a stable interpreter (e.g. /opt/homebrew/bin/python3.13)."
-        : " Try setting Autonomy › Python: Path to Python 3.10–3.13 from python.org or your package manager.";
+        ? " Try setting Context Control › Python: Path to a stable interpreter (e.g. /opt/homebrew/bin/python3.13)."
+        : " Try setting Context Control › Python: Path to Python 3.10–3.13 from python.org or your package manager.";
     output.appendLine(
       `[bootstrap] venv creation failed (often ensurepip).${hint} Full error: ${e}`,
     );
@@ -349,7 +349,7 @@ async function runPip(
   return vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: "Autonomy: installing Python dependencies…",
+      title: "Context Control: installing Python dependencies…",
       cancellable: false,
     },
     async () => {

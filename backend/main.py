@@ -30,7 +30,7 @@ logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
-logger = logging.getLogger("autonomy")
+logger = logging.getLogger("context_control")
 
 ANTHROPIC_UPSTREAM_URL = os.getenv("ANTHROPIC_UPSTREAM_URL", "https://api.anthropic.com")
 
@@ -57,7 +57,7 @@ async def lifespan(app: FastAPI):
     forwarder.configure(ANTHROPIC_UPSTREAM_URL)
     ws_manager.register_snapshot_builder(_build_snapshot)
     await forwarder.startup()
-    logger.info("autonomy proxy ready (upstream=%s)", ANTHROPIC_UPSTREAM_URL)
+    logger.info("context control proxy ready (upstream=%s)", ANTHROPIC_UPSTREAM_URL)
     try:
         yield
     finally:

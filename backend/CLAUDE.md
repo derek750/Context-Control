@@ -1,4 +1,4 @@
-# Autonomy backend (`backend/`)
+# Context Control backend (`backend/`)
 
 FastAPI proxy that sits between Claude Code and Anthropic:
 
@@ -23,7 +23,7 @@ source venv/bin/activate
 uvicorn main:app --host 127.0.0.1 --port 8080 --reload
 ```
 
-The VS Code extension resolves this folder (or a bundled copy under `extensions/backend`) and uses `requirements.txt` for its **managed** Python environment when the user has not set `autonomy.pythonPath`.
+The VS Code extension resolves this folder (or a bundled copy under `extensions/backend`) and uses `requirements.txt` for its **managed** Python environment when the user has not set `contextControl.pythonPath`.
 
 ## Configuration
 
