@@ -20,6 +20,10 @@
 
 In Claude Code, each prompt includes previous messages and replies, forming the context window. As sessions grow, this window can become bloated with redundant or low-value context, increasing token usage and affecting response quality. Context Control intercepts the context before it is sent, letting developers trim, rewrite, or remove unnecessary context—reducing token waste, preventing bad context from compounding, and improving model performance.
 
+## Demo
+
+[Demo video](https://youtu.be/2YekO5pI1ZI)
+
 ## How it works
 
 ```

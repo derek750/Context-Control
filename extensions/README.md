@@ -2,6 +2,10 @@
 
 **Context Control** shows you the full **context window** Claude Code is about to send, as an interactive **bar chart** in the editor. Trim useless sections, edit or delete message parts, and optionally **hold** requests for your approval before they go to Anthropic—so you spend fewer tokens and keep context quality under control.
 
+## Demo
+
+[Demo video](https://youtu.be/2YekO5pI1ZI)
+
 ---
 
 ## Quick start
